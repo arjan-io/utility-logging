@@ -67,7 +67,7 @@ helpt bij NAS-uitval; een uitgeschakelde Pi kan geen waterpulsen tellen.
 
 De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
 NAS-uitval getest. De containers en GPIO-toegang zijn nog niet op de
-32-bit Pi getest en de MariaDB-SQL is nog niet op een server uitgevoerd.
+32-bit Pi getest; ook echte MariaDB-inserts zijn nog niet gecontroleerd.
 Gebruik deze versie daarom nog niet als vervanging van de oude lezers.
 
 Er staan geen wachtwoorden, database-exports of persoonlijke
