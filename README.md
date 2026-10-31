@@ -28,9 +28,10 @@ claimt daarvoor geen factuurbedrag.
 1. Maak eerst de aparte MariaDB-database `nuts_v2` met de los aangeleverde
    phpMyAdmin-SQL. Zet de benodigde tariefregels in die database. De oude
    databases blijven bestaan.
-2. Haal deze repository op de Pi op en vul een eigen `.env` in met
-   [`.env.example`](.env.example) als voorbeeld. Bewaar `.env` en de map
-   `data/` buiten Git. Zet `DATA_DIR` op een blijvende locatie op de Pi.
+2. Haal deze repository op de Pi op met `git clone`; `git init` is niet
+   nodig. Vul een eigen `.env` in met [`.env.example`](.env.example) als
+   voorbeeld. Bewaar `.env` en de map `data/` buiten Git. Zet `DATA_DIR`
+   op een blijvende locatie op de Pi.
 3. Bouw de image met `docker compose build`. Controleer de lokale
    configuratie met `docker compose config --quiet`.
 4. Start `sync` met `docker compose up -d sync`. Start voor een MQTT-proef
@@ -44,6 +45,15 @@ claimt daarvoor geen factuurbedrag.
    de fysieke watermeter.
 7. Start na de historische import de dag- en maandberekening met
    `docker compose --profile aggregate up -d aggregate`.
+
+```sh
+git clone https://github.com/arjan-io/utility-logging.git
+cd utility-logging
+cp .env.example .env
+# Vul .env met de eigen serveradressen, gebruikers en wachtwoorden.
+docker compose build
+docker compose up -d sync
+```
 
 De profielen voor P1 en water voorkomen dat een gewone `docker compose up`
 dezelfde poort of pin tegelijk met de oude scripts opent. Een SQLite-buffer
