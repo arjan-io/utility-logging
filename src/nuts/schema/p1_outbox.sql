@@ -19,6 +19,13 @@ CREATE TABLE p1_outbox (
   phase_l2_import_w INTEGER NULL,
   phase_l3_import_w INTEGER NULL,
   phase_l3_export_w INTEGER NULL,
+  voltage_l1_v TEXT NULL,
+  voltage_l2_v TEXT NULL,
+  voltage_l3_v TEXT NULL,
+  current_l1_a TEXT NULL,
+  current_l2_a TEXT NULL,
+  current_l3_a TEXT NULL,
+  meter_tariff_code INTEGER NULL,
   delivered_at_utc TEXT NULL
 ) WITHOUT ROWID;
 

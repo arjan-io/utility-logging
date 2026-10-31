@@ -16,12 +16,14 @@ P1_COLUMNS = (
     "event_id", "measured_at_utc", "import_low_kwh", "import_high_kwh",
     "export_low_kwh", "export_high_kwh", "gas_m3", "gas_measured_at_utc",
     "import_w", "export_w", "phase_l1_import_w", "phase_l2_import_w",
-    "phase_l3_import_w", "phase_l3_export_w",
+    "phase_l3_import_w", "phase_l3_export_w", "voltage_l1_v",
+    "voltage_l2_v", "voltage_l3_v", "current_l1_a", "current_l2_a",
+    "current_l3_a", "meter_tariff_code",
 )
 WATER_COLUMNS = ("event_id", "measured_at_utc", "event_kind", "liters")
 SCHEMAS = {
-    "p1": "p1_outbox.sqlite.sql",
-    "water": "water_outbox.sqlite.sql",
+    "p1": "p1_outbox.sql",
+    "water": "water_outbox.sql",
 }
 
 
@@ -50,7 +52,7 @@ class Outbox:
             "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?", (table,)
         ).fetchone()
         if not found:
-            schema = Path(__file__).resolve().parents[2] / "sql" / SCHEMAS[kind]
+            schema = Path(__file__).resolve().parent / "schema" / SCHEMAS[kind]
             self.connection.executescript(schema.read_text(encoding="utf-8"))
 
     @property

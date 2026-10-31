@@ -1,49 +1,60 @@
 # Utility logging
 
-Nieuwe registratie voor elektriciteit, gas en water op een Raspberry Pi,
-met MariaDB en MQTT op een aparte server. Deze repository bevat het
-nieuwe databaseschema, lokale meetbuffers en de eerste meet- en
-synchronisatiecode.
+Docker-diensten voor elektriciteit, gas en water op een Raspberry Pi.
+MariaDB en de MQTT-broker draaien elders. Dit project bevat uitsluitend
+de uitvoerbare diensten, hun containerconfiguratie en dit installatieblad.
+SQL voor het aanmaken van de MariaDB-tabellen en de eenmalige migratie wordt
+apart aangeleverd en door de beheerder zelf uitgevoerd.
 
-## Stand van het project
+## Wat draait er?
 
-De code is **in ontwikkeling**. De nieuwe P1- en GPIO-processen mogen
-pas worden gestart nadat de bestaande lezers hun apparaat hebben
-vrijgegeven. De SQL is nog niet op de productie-MariaDB uitgevoerd.
-De historische import, kostenberekening, MQTT-publicatie, webpagina en
-Docker-opzet zijn nog niet volledig getest of af.
+| Dienst | Taak |
+| --- | --- |
+| `p1` | Leest één P1-seriële poort en bewaart elk geldig telegram eerst in lokale SQLite. |
+| `water` | Telt geaccepteerde pulsen op GPIO17 direct in lokale SQLite en schrijft nulmetingen. |
+| `sync` | Stuurt beide SQLite-buffers naar `nuts_v2` op MariaDB; herhalen maakt geen dubbele events. |
+| `aggregate` | Berekent gesloten dagen en maanden voor grafieken, met onbekende waarden bij meetgaten. |
+| `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
 
-## SQL voor phpMyAdmin
+De oude MQTT-velden blijven beschikbaar. Met `MQTT_PREFIX=sensors/v2`
+verschijnen ze eerst onder proefonderwerpen. Pas bij de definitieve
+omschakeling wordt de prefix `sensors` gebruikt. De kosten zijn momenteel
+**variabele afnamekosten**. Vaste leveringskosten, netbeheer, saldering en
+teruglevering vragen nog een afzonderlijke afrekenberekening; deze versie
+claimt daarvoor geen factuurbedrag.
 
-De databasewijzigingen zijn losse bestanden. Voer ze zelf uit, in deze
-volgorde:
+## Voorbereiden op de Pi
 
-1. [`sql/001_schema_v2.sql`](sql/001_schema_v2.sql) maakt de aparte
-   database `nuts_v2` en haar tabellen aan. Test eerst op een **lege,
-   afzonderlijke MariaDB-testinstallatie**.
-2. [`sql/002_verify_schema_v2.sql`](sql/002_verify_schema_v2.sql) is
-   alleen-lezen en controleert de tabellen, relaties en aantallen.
+1. Maak eerst de aparte MariaDB-database `nuts_v2` met de los aangeleverde
+   phpMyAdmin-SQL. Zet de benodigde tariefregels in die database. De oude
+   databases blijven bestaan.
+2. Haal deze repository op de Pi op en vul een eigen `.env` in met
+   [`.env.example`](.env.example) als voorbeeld. Bewaar `.env` en de map
+   `data/` buiten Git. Zet `DATA_DIR` op een blijvende locatie op de Pi.
+3. Bouw de image met `docker compose build`. Controleer de lokale
+   configuratie met `docker compose config --quiet`.
+4. Start `sync` met `docker compose up -d sync`. Start voor een MQTT-proef
+   `docker compose --profile publish up -d publisher`; laat de prefix op
+   `sensors/v2` staan.
+5. Stop **eerst** de oude P1-lezer. Start pas daarna
+   `docker compose --profile p1 up -d p1`. Controleer SQLite, MariaDB en
+   de MQTT-proefonderwerpen.
+6. Stop **eerst** de oude GPIO-lezer. Start pas daarna
+   `docker compose --profile water up -d water`. Controleer pulsen tegen
+   de fysieke watermeter.
+7. Start na de historische import de dag- en maandberekening met
+   `docker compose --profile aggregate up -d aggregate`.
 
-Deze scripts raken de oude databases niet. De productie-uitvoering en
-historische import horen pas bij de definitieve omschakeling, na een
-verse backup. Zie [`sql/README.md`](sql/README.md) voor de volgorde.
+De profielen voor P1 en water voorkomen dat een gewone `docker compose up`
+dezelfde poort of pin tegelijk met de oude scripts opent. Een SQLite-buffer
+helpt bij NAS-uitval; een uitgeschakelde Pi kan geen waterpulsen tellen.
 
-## Lokale proef zonder Pi of server
+## Huidige testgrens
 
-De simulatie gebruikt alleen tijdelijke SQLite-bestanden en een nepserver:
+De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
+NAS-uitval getest. De containers en GPIO-toegang zijn nog niet op de
+32-bit Pi getest en de MariaDB-SQL is nog niet op een server uitgevoerd.
+Gebruik deze versie daarom nog niet als vervanging van de oude lezers.
 
-```sh
-PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m nuts.simulate
-PYTHONPATH=src PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -v
-```
-
-De P1-parser bewaart kWh-standen met drie decimalen. Waterpulsen en
-nulmetingen worden eerst lokaal opgeslagen; een synchronisatiewerker
-stuurt events later met vaste event-ID's naar MariaDB. De lokale proef
-dekt onder meer herhalen na een serverstoring en meetgaten over een
-daggrens. Hardware, MariaDB en Docker vereisen aparte tests.
-
-## Configuratie
-
-Gebruik [`.env.example`](.env.example) als sjabloon. Zet ingevulde
-wachtwoorden, SQLite-bestanden, exports en backups nooit in GitHub.
+Er staan geen wachtwoorden, database-exports of persoonlijke
+migratienotities in deze repository.

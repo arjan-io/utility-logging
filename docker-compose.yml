@@ -1,0 +1,38 @@
+x-common: &common
+  build: .
+  env_file: .env
+  volumes:
+    - ${DATA_DIR:-./data}:/var/lib/nuts
+  restart: unless-stopped
+  init: true
+
+services:
+  sync:
+    <<: *common
+    command: ["python", "-m", "nuts.sync"]
+
+  p1:
+    <<: *common
+    profiles: ["p1"]
+    command: ["python", "-m", "nuts.p1_capture"]
+    devices:
+      - ${P1_DEVICE:-/dev/ttyUSB0}:/dev/p1
+    environment:
+      P1_DEVICE: /dev/p1
+
+  water:
+    <<: *common
+    profiles: ["water"]
+    command: ["python", "-m", "nuts.water_gpio"]
+    devices:
+      - ${GPIO_CHIP:-/dev/gpiochip0}:${GPIO_CHIP:-/dev/gpiochip0}
+
+  publisher:
+    <<: *common
+    profiles: ["publish"]
+    command: ["python", "-m", "nuts.publisher"]
+
+  aggregate:
+    <<: *common
+    profiles: ["aggregate"]
+    command: ["python", "-m", "nuts.aggregate"]

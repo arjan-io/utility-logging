@@ -1,0 +1,17 @@
+.git
+.github
+.env
+.env.*
+!.env.example
+AGENTS.md
+PLAN.md
+docs
+sql
+tests
+data
+*.sqlite
+*.sqlite-*
+*.db
+*.log
+__pycache__
+.pycache

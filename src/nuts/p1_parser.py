@@ -22,6 +22,16 @@ POWER = {
     "1-0:61.7.0": "phase_l3_import_w",
     "1-0:62.7.0": "phase_l3_export_w",
 }
+VOLTAGE = {
+    "1-0:32.7.0": "voltage_l1_v",
+    "1-0:52.7.0": "voltage_l2_v",
+    "1-0:72.7.0": "voltage_l3_v",
+}
+CURRENT = {
+    "1-0:31.7.0": "current_l1_a",
+    "1-0:51.7.0": "current_l2_a",
+    "1-0:71.7.0": "current_l3_a",
+}
 VALUE = re.compile(r"^([^()]+)\(([0-9]+(?:\.[0-9]+)?)\*([^)]*)\)")
 GAS = re.compile(r"^0-\d+:24\.2\.1\(([0-9]{12}[SW])\)\(([0-9]+(?:\.[0-9]+)?)\*m3\)")
 
@@ -93,6 +103,11 @@ def parse_telegram(telegram: bytes, received_at: Optional[datetime] = None) -> D
                 raise ValueError("Ongeldig P1-tijdstip")
             readings["measured_at_utc"] = _gas_time(match.group(1))
             continue
+        if line.startswith("0-0:96.14.0("):
+            match = re.fullmatch(r"0-0:96\.14\.0\(([0-9]+)\)", line)
+            if match:
+                readings["meter_tariff_code"] = int(match.group(1))
+            continue
         gas = GAS.match(line)
         if gas:
             readings["gas_m3"] = str(_decimal(gas.group(2), "m3", "m3"))
@@ -109,6 +124,10 @@ def parse_telegram(telegram: bytes, received_at: Optional[datetime] = None) -> D
             if watts != watts.to_integral_value():
                 raise ValueError("P1-vermogen bevat fractie van watt")
             readings[POWER[obis]] = int(watts)
+        elif obis in VOLTAGE:
+            readings[VOLTAGE[obis]] = str(_decimal(raw, unit, "V"))
+        elif obis in CURRENT:
+            readings[CURRENT[obis]] = str(_decimal(raw, unit, "A"))
     for column in list(REGISTER.values()) + ["import_w", "export_w"]:
         if column not in readings:
             raise ValueError("P1-veld ontbreekt: {}".format(column))

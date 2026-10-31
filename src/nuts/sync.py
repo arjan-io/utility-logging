@@ -12,9 +12,11 @@ INSERT INTO nuts_v2.p1_reading
 (event_id, source, measured_at_utc, received_at_utc,
  import_low_kwh, import_high_kwh, export_low_kwh, export_high_kwh,
  gas_m3, gas_measured_at_utc, import_w, export_w,
- phase_l1_import_w, phase_l2_import_w, phase_l3_import_w, phase_l3_export_w)
+ phase_l1_import_w, phase_l2_import_w, phase_l3_import_w, phase_l3_export_w,
+ voltage_l1_v, voltage_l2_v, voltage_l3_v,
+ current_l1_a, current_l2_a, current_l3_a, meter_tariff_code)
 VALUES (%s, 'collector', %s, UTC_TIMESTAMP(3), %s, %s, %s, %s,
-        %s, %s, %s, %s, %s, %s, %s, %s)
+        %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 ON DUPLICATE KEY UPDATE event_id=VALUES(event_id)
 """
 INSERT_WATER = """

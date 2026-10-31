@@ -4,6 +4,7 @@
 !.env.example
 secrets/
 backups/
+data/
 *.dump
 *.sql.gz
 *.sqlite
@@ -25,5 +26,9 @@ __pycache__/
 AGENTS.md
 PLAN.md
 docs/
-sql/legacy_inventory.sql
+sql/
+tests/
+.github/
+src/nuts/history.py
 src/nuts/import_legacy.py
+src/nuts/simulate.py
