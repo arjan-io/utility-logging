@@ -73,15 +73,17 @@ def run_forever() -> None:
         "database": "nuts_v2",
         "connection_timeout": 5,
     }
-    p1_path = os.environ["P1_OUTBOX_PATH"]
-    water_path = os.environ["WATER_OUTBOX_PATH"]
-    with Outbox(p1_path, "p1") as p1, Outbox(water_path, "water") as water:
+    kind = os.environ["OUTBOX_KIND"]
+    if kind not in ("p1", "water"):
+        raise ValueError("OUTBOX_KIND moet p1 of water zijn")
+    path = os.environ["P1_OUTBOX_PATH" if kind == "p1" else "WATER_OUTBOX_PATH"]
+    with Outbox(path, kind) as outbox:
         while True:
             try:
                 connection = mysql.connector.connect(**db_config)
                 try:
                     sink = MariaDBSink(connection)
-                    synced = sync_batch(p1, sink) + sync_batch(water, sink)
+                    synced = sync_batch(outbox, sink)
                 finally:
                     connection.close()
                 time.sleep(1 if synced else 5)
