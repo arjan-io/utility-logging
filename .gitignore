@@ -1,0 +1,29 @@
+# Geheime configuratie en lokale metingen
+.env
+.env.*
+!.env.example
+secrets/
+backups/
+*.dump
+*.sql.gz
+*.sqlite
+*.sqlite-*
+*.db
+
+# Python en lokale ontwikkeling
+__pycache__/
+.pycache/
+*.py[cod]
+.venv/
+.pytest_cache/
+
+# Systeem- en editorbestanden
+.DS_Store
+*.log
+
+# Lokale migratienotities over de bestaande installatie
+AGENTS.md
+PLAN.md
+docs/
+sql/legacy_inventory.sql
+src/nuts/import_legacy.py
