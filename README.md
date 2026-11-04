@@ -26,6 +26,13 @@ claimt daarvoor geen factuurbedrag.
 
 ## Voorbereiden op de Pi
 
+Gebruik de Docker Compose-plugin met een spatie: `docker compose`. Dit
+project gebruikt Compose-profielen. De oude Python-versie `docker-compose`
+met koppelteken is hiervoor niet ondersteund; die kan `services:` als een
+servicenaam lezen en dan ten onrechte een interpolatiefout melden. Controleer
+eerst `docker compose version`. Als Compose ontbreekt, installeer op
+Raspberry Pi OS de pakketnaam `docker-compose-plugin` uit de Docker-pakketten.
+
 De repository mag onder een gebruikersmap in `/home/` staan, bijvoorbeeld
 `/home/pi/utility-logging`. `DATA_DIR=./data` bewaart de SQLite-buffers
 naast de repository; die map is uitgesloten van Git. Gebruik dezelfde
@@ -73,6 +80,8 @@ git clone https://github.com/arjan-io/utility-logging.git
 cd utility-logging
 cp .env.example .env
 # Vul .env met de eigen serveradressen, gebruikers en wachtwoorden.
+docker compose version
+docker compose config --quiet
 docker compose build
 docker compose up -d p1-sync water-sync
 ```
