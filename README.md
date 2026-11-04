@@ -89,6 +89,13 @@ Het Dockerfile heeft geen vastgelegde CPU-architectuur: Docker kiest op de
    Vul eerst de echte NAS-gegevens in `.env` in; deel dat bestand nooit.
    De melding dat Buildx ontbreekt is bij een native build op de Pi alleen
    een waarschuwing zolang beide images met `Successfully built` eindigen.
+   Controleer daarna de volledige weg van tijdelijke SQLite-buffers via de
+   synchronisatiecode naar MariaDB. Ook deze proef draait de MariaDB-rijen
+   terug; de tijdelijke SQLite-bestanden worden na afloop verwijderd:
+
+   ```sh
+   docker compose run --rm --no-deps p1-sync python -m nuts.sync_check
+   ```
 4. Start de twee onafhankelijke synchronisatoren met
    `docker compose up -d p1-sync water-sync`. Start voor een MQTT-proef
    `docker compose --profile publish up -d publisher`; laat de prefix op
@@ -135,10 +142,11 @@ helpt bij NAS-uitval; een uitgeschakelde Pi kan geen waterpulsen tellen.
 ## Huidige testgrens
 
 De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
-NAS-uitval getest. Een handmatige P1- en waterinsert met rollback is op
-MariaDB bevestigd. De containers, de databaseverbinding vanuit de
-containers en GPIO-toegang zijn nog niet op de 32-bit Pi getest.
-Gebruik deze versie daarom nog niet als vervanging van de oude lezers.
+NAS-uitval getest. Een P1- en waterinsert met rollback is vanuit een
+container op de 32-bit Pi bevestigd. Beide synchronisatiecontainers zijn
+op de Pi gestart en hebben hun SQLite-buffer aangemaakt. Een echte
+SQLite-naar-MariaDB-proef, GPIO-toegang en de P1-poort moeten nog worden
+getest. Gebruik deze versie nog niet als vervanging van de oude lezers.
 
 Er staan geen wachtwoorden, database-exports of persoonlijke
 migratienotities in deze repository.
