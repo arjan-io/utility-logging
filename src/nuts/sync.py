@@ -85,8 +85,9 @@ def run_forever() -> None:
     kind = os.environ["OUTBOX_KIND"]
     if kind not in ("p1", "water", "pv"):
         raise ValueError("OUTBOX_KIND moet p1, water of pv zijn")
-    path = os.environ[{"p1": "P1_OUTBOX_PATH", "water": "WATER_OUTBOX_PATH",
-                       "pv": "PV_OUTBOX_PATH"}[kind]]
+    path_key = {"p1": "P1_OUTBOX_PATH", "water": "WATER_OUTBOX_PATH",
+                "pv": "PV_OUTBOX_PATH"}[kind]
+    path = os.getenv(path_key, "/var/lib/nuts/pv.sqlite") if kind == "pv" else os.environ[path_key]
     with Outbox(path, kind) as outbox:
         while True:
             try:

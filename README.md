@@ -170,8 +170,9 @@ image ondersteunt ARMv7 op de huidige 32-bit Pi en ARM64 op een latere Pi.
 
 Bij een geslaagde proef kunnen de getallen zonder eenheid uit de cloud komen.
 Vergelijk `station_day_generation` en `station_total_generation` met dezelfde
-waarden op de SEMS+-stationpagina. Stel **pas daarna** `GOODWE_TOTAL_UNIT=kWh`
-of `MWh` in de lokale `.env` in. De PV-dienst weigert te starten als deze
+waarden op de SEMS+-stationpagina. Voeg **pas daarna**
+`GOODWE_TOTAL_UNIT=kWh` of `GOODWE_TOTAL_UNIT=MWh` toe aan de bestaande
+lokale `.env`. De PV-dienst weigert te starten als deze
 eenheid ontbreekt. Expliciete eenheden in de API-uitvoer worden altijd zelf
 omgerekend. Het huidige vermogen uit `powerflow.pv` wordt als watt gelezen;
 als dit veld ontbreekt, blijft `current_w` leeg. De oude `inverter_*`-velden

@@ -64,7 +64,7 @@ def run_forever():
     interval = int(os.getenv("GOODWE_POLL_SECONDS", "300"))
     if interval < 60:
         raise ValueError("GOODWE_POLL_SECONDS moet minstens 60 zijn")
-    unit = os.environ["GOODWE_TOTAL_UNIT"]
+    unit = os.getenv("GOODWE_TOTAL_UNIT", "")
     if unit not in ("kWh", "MWh"):
         raise ValueError("GOODWE_TOTAL_UNIT moet kWh of MWh zijn")
     station = SingleInverter(
@@ -73,7 +73,7 @@ def run_forever():
         password=os.environ["GOODWE_PASSWORD"],
         skipload=True,
     )
-    with Outbox(os.environ["PV_OUTBOX_PATH"], "pv") as outbox:
+    with Outbox(os.getenv("PV_OUTBOX_PATH", "/var/lib/nuts/pv.sqlite"), "pv") as outbox:
         while True:
             try:
                 data = station.get_current_readings(maxretries=1)
