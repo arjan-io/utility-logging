@@ -32,6 +32,18 @@ met koppelteken is hiervoor niet ondersteund; die kan `services:` als een
 servicenaam lezen en dan ten onrechte een interpolatiefout melden. Controleer
 eerst `docker compose version`. Als Compose ontbreekt, installeer op
 Raspberry Pi OS de pakketnaam `docker-compose-plugin` uit de Docker-pakketten.
+Dat kan, als de Docker-pakketbron al is ingesteld, met:
+
+```sh
+sudo apt-get update
+sudo apt-get install docker-compose-plugin
+docker compose version
+```
+
+Als `apt` geen pakketkandidaat vindt, gebruik dan de officiële
+[Docker-installatie voor Raspberry Pi OS](https://docs.docker.com/engine/install/raspberry-pi-os/)
+om de Docker-pakketbron toe te voegen. Installeer niet opnieuw de oude
+`docker-compose`-applicatie.
 
 De repository mag onder een gebruikersmap in `/home/` staan, bijvoorbeeld
 `/home/pi/utility-logging`. `DATA_DIR=./data` bewaart de SQLite-buffers
