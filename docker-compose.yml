@@ -51,3 +51,11 @@ services:
     <<: *common
     profiles: ["aggregate"]
     command: ["python", "-m", "nuts.aggregate"]
+
+  pv-probe:
+    build:
+      context: .
+      dockerfile: Dockerfile.pv
+    env_file: .env
+    profiles: ["pv"]
+    command: ["python", "-m", "nuts.pv_probe"]
