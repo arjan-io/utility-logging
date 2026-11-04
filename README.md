@@ -26,6 +26,13 @@ claimt daarvoor geen factuurbedrag.
 
 ## Voorbereiden op de Pi
 
+De repository mag onder een gebruikersmap in `/home/` staan, bijvoorbeeld
+`/home/pi/utility-logging`. `DATA_DIR=./data` bewaart de SQLite-buffers
+naast de repository; die map is uitgesloten van Git. Gebruik dezelfde
+`data/`-map wanneer je later de Pi of het besturingssysteem vervangt.
+Het Dockerfile heeft geen vastgelegde CPU-architectuur: Docker kiest op de
+32-bit Pi 4 de ARMv7-image en op een 64-bit Pi de ARM64-image.
+
 1. Maak eerst de aparte MariaDB-database `nuts_v2` met de los aangeleverde
    phpMyAdmin-SQL. Zet de benodigde tariefregels in die database. De oude
    databases blijven bestaan.
@@ -48,6 +55,19 @@ claimt daarvoor geen factuurbedrag.
 7. Start na de historische import de dag- en maandberekening met
    `docker compose --profile aggregate up -d aggregate`.
 
+Voor de P1-poort kies je in `.env` het apparaat op de host. Een stabiel pad
+onder `/dev/serial/by-id/` heeft de voorkeur wanneer dat bestaat. De
+container ziet het altijd als `/dev/p1`.
+
+Voor de watermeter kies je in `.env` de GPIO-chip met de pinnen van de
+40-pins header. Op de Pi 4 is dat meestal `/dev/gpiochip0`; op de Pi 5
+kan het afhankelijk van de kernel `/dev/gpiochip0` of `/dev/gpiochip4`
+zijn. `gpiodetect` toont de chip met `pinctrl` in het label. Compose koppelt
+de gekozen chip binnen de container altijd aan `/dev/gpiochip0`; de code
+opent die chip expliciet. De device-tree wordt alleen-lezen gekoppeld zodat
+GPIO Zero de BCM-pinnummers kan herkennen. Voor deze instellingen is geen
+andere Python-code of Dockerfile nodig bij een overstap naar 64-bit of Pi 5.
+
 ```sh
 git clone https://github.com/arjan-io/utility-logging.git
 cd utility-logging
@@ -66,8 +86,9 @@ helpt bij NAS-uitval; een uitgeschakelde Pi kan geen waterpulsen tellen.
 ## Huidige testgrens
 
 De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
-NAS-uitval getest. De containers en GPIO-toegang zijn nog niet op de
-32-bit Pi getest; ook echte MariaDB-inserts zijn nog niet gecontroleerd.
+NAS-uitval getest. Een handmatige P1- en waterinsert met rollback is op
+MariaDB bevestigd. De containers, de databaseverbinding vanuit de
+containers en GPIO-toegang zijn nog niet op de 32-bit Pi getest.
 Gebruik deze versie daarom nog niet als vervanging van de oude lezers.
 
 Er staan geen wachtwoorden, database-exports of persoonlijke

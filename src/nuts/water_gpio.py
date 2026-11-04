@@ -29,7 +29,11 @@ def run_forever() -> None:
         # pull_up=True makes the falling edge (contact to ground) a press.
         # Our own 100 ms lockout ignores repeated edges; the input is not
         # required to stay low for 100 ms.
-        factory = LGPIOFactory()
+        # Compose maps the selected host chip to gpiochip0 in the container.
+        # Select it explicitly so Pi 4/5 chip numbering never changes which
+        # device this process opens. The host device tree is mounted read-only
+        # for gpiozero's Raspberry Pi pin numbering.
+        factory = LGPIOFactory(chip=0)
         button = Button(pin, pull_up=True, bounce_time=None, pin_factory=factory)
         try:
             button.when_pressed = on_pulse

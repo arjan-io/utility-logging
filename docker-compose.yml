@@ -38,8 +38,9 @@ services:
     command: ["python", "-m", "nuts.water_gpio"]
     volumes:
       - ${DATA_DIR:-./data}/water:/var/lib/nuts
+      - /proc/device-tree:/proc/device-tree:ro
     devices:
-      - ${GPIO_CHIP:-/dev/gpiochip0}:${GPIO_CHIP:-/dev/gpiochip0}
+      - ${GPIO_CHIP:-/dev/gpiochip0}:/dev/gpiochip0
 
   publisher:
     <<: *common
