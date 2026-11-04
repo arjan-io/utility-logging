@@ -62,8 +62,8 @@ latere 64-bit installatie bij voorkeur de
 [officiële Docker-pakketbron](https://docs.docker.com/engine/install/debian/)
 en `docker-compose-plugin` via `apt`.
 
-De repository mag onder een gebruikersmap in `/home/` staan, bijvoorbeeld
-`/home/pi/utility-logging`. `DATA_DIR=./data` bewaart de SQLite-buffers
+Op deze Pi staat de repository in `/home/utility-logging`.
+`DATA_DIR=./data` bewaart de SQLite-buffers
 naast de repository; die map is uitgesloten van Git. Gebruik dezelfde
 `data/`-map wanneer je later de Pi of het besturingssysteem vervangt.
 Het Dockerfile heeft geen vastgelegde CPU-architectuur: Docker kiest op de
@@ -116,8 +116,8 @@ GPIO Zero de BCM-pinnummers kan herkennen. Voor deze instellingen is geen
 andere Python-code of Dockerfile nodig bij een overstap naar 64-bit of Pi 5.
 
 ```sh
-git clone https://github.com/arjan-io/utility-logging.git
-cd utility-logging
+git clone https://github.com/arjan-io/utility-logging.git /home/utility-logging
+cd /home/utility-logging
 cp .env.example .env
 # Vul .env met de eigen serveradressen, gebruikers en wachtwoorden.
 docker compose version
