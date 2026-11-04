@@ -40,10 +40,27 @@ sudo apt-get install docker-compose-plugin
 docker compose version
 ```
 
-Als `apt` geen pakketkandidaat vindt, gebruik dan de officiële
-[Docker-installatie voor Raspberry Pi OS](https://docs.docker.com/engine/install/raspberry-pi-os/)
-om de Docker-pakketbron toe te voegen. Installeer niet opnieuw de oude
-`docker-compose`-applicatie.
+Als `apt` geen pakketkandidaat vindt maar Docker Engine al werkt, kan de
+Compose-plugin [handmatig voor alleen deze gebruiker worden geïnstalleerd](https://docs.docker.com/compose/install/linux/#install-the-plugin-manually).
+Controleer eerst `dpkg --print-architecture` en `uname -m`. Voor een
+32-bit Pi 4 met `armhf` en `armv7l` gebruikt de onderstaande proef de
+officiële ARMv7-release. De checksum komt uit de
+[Docker-imagebouw](https://github.com/docker-library/repo-info/blob/master/repos/docker/remote/dind-rootless.md).
+De bestaande Docker Engine wordt hierbij niet vervangen.
+
+```sh
+mkdir -p /home/pi/.docker/cli-plugins
+curl -fL https://github.com/docker/compose/releases/download/v5.6.1/docker-compose-linux-armv7 -o /home/pi/.docker/cli-plugins/docker-compose
+printf '%s  %s\n' 'e2ed79b41693f5e6473eb9c1005bd4cbb83844d8220ac72fe5c6a6cc5e0bfee8' '/home/pi/.docker/cli-plugins/docker-compose' | sha256sum -c -
+chmod +x /home/pi/.docker/cli-plugins/docker-compose
+docker compose version
+```
+
+Voer `chmod` alleen uit als de checksum `OK` meldt. Een handmatig
+geïnstalleerde plugin wordt niet automatisch bijgewerkt. Gebruik op een
+latere 64-bit installatie bij voorkeur de
+[officiële Docker-pakketbron](https://docs.docker.com/engine/install/debian/)
+en `docker-compose-plugin` via `apt`.
 
 De repository mag onder een gebruikersmap in `/home/` staan, bijvoorbeeld
 `/home/pi/utility-logging`. `DATA_DIR=./data` bewaart de SQLite-buffers
