@@ -59,3 +59,24 @@ services:
     env_file: .env
     profiles: ["pv"]
     command: ["python", "-m", "nuts.pv_probe"]
+
+  pv:
+    build:
+      context: .
+      dockerfile: Dockerfile.pv
+    env_file: .env
+    profiles: ["pv"]
+    restart: unless-stopped
+    init: true
+    command: ["python", "-m", "nuts.pv_capture"]
+    volumes:
+      - ${DATA_DIR:-./data}/pv:/var/lib/nuts
+
+  pv-sync:
+    <<: *common
+    profiles: ["pv"]
+    command: ["python", "-m", "nuts.sync"]
+    environment:
+      OUTBOX_KIND: pv
+    volumes:
+      - ${DATA_DIR:-./data}/pv:/var/lib/nuts

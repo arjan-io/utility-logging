@@ -4,7 +4,7 @@ import os
 import time
 from typing import Mapping
 
-from .outbox import Outbox, P1_COLUMNS, WATER_COLUMNS
+from .outbox import Outbox, P1_COLUMNS, WATER_COLUMNS, PV_COLUMNS
 
 
 INSERT_P1 = """
@@ -22,6 +22,13 @@ ON DUPLICATE KEY UPDATE event_id=VALUES(event_id)
 INSERT_WATER = """
 INSERT INTO nuts_v2.water_event
 (event_id, source, measured_at_utc, received_at_utc, event_kind, liters)
+VALUES (%s, 'collector', %s, UTC_TIMESTAMP(3), %s, %s)
+ON DUPLICATE KEY UPDATE event_id=VALUES(event_id)
+"""
+INSERT_PV = """
+INSERT INTO nuts_v2.pv_reading
+(event_id, source, measured_at_utc, received_at_utc,
+ generated_total_kwh, current_w)
 VALUES (%s, 'collector', %s, UTC_TIMESTAMP(3), %s, %s)
 ON DUPLICATE KEY UPDATE event_id=VALUES(event_id)
 """
@@ -48,6 +55,8 @@ class MariaDBSink:
             statement, columns = INSERT_P1, P1_COLUMNS
         elif kind == "water":
             statement, columns = INSERT_WATER, WATER_COLUMNS
+        elif kind == "pv":
+            statement, columns = INSERT_PV, PV_COLUMNS
         else:
             raise ValueError(kind)
         cursor = self.connection.cursor()
@@ -74,9 +83,10 @@ def run_forever() -> None:
         "connection_timeout": 5,
     }
     kind = os.environ["OUTBOX_KIND"]
-    if kind not in ("p1", "water"):
-        raise ValueError("OUTBOX_KIND moet p1 of water zijn")
-    path = os.environ["P1_OUTBOX_PATH" if kind == "p1" else "WATER_OUTBOX_PATH"]
+    if kind not in ("p1", "water", "pv"):
+        raise ValueError("OUTBOX_KIND moet p1, water of pv zijn")
+    path = os.environ[{"p1": "P1_OUTBOX_PATH", "water": "WATER_OUTBOX_PATH",
+                       "pv": "PV_OUTBOX_PATH"}[kind]]
     with Outbox(path, kind) as outbox:
         while True:
             try:

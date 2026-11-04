@@ -17,6 +17,8 @@ apart aangeleverd en door de beheerder zelf uitgevoerd.
 | `aggregate` | Berekent gesloten dagen en maanden voor grafieken, met onbekende waarden bij meetgaten. |
 | `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
 | `pv-probe` | Leest eenmalig een GoodWe SEMS+-station zonder data op te slaan. |
+| `pv` | Vraagt SEMS+ periodiek uit en bewaart de cumulatieve opbrengst in een eigen SQLite-buffer. |
+| `pv-sync` | Stuurt PV-metingen onafhankelijk naar MariaDB en herhaalt na NAS-uitval. |
 
 De oude MQTT-velden blijven beschikbaar. Met `MQTT_PREFIX=sensors/v2`
 verschijnen ze eerst onder proefonderwerpen. Pas bij de definitieve
@@ -165,6 +167,36 @@ en opgewekte energie. Ontbrekende velden krijgen `null`. De PV-proef heeft
 een eigen Python 3.12-image, omdat `pygoodwe` dat vereist. De officiële
 image ondersteunt ARMv7 op de huidige 32-bit Pi en ARM64 op een latere Pi.
 `pv-probe` blijft na afloop niet draaien en opent geen seriële of GPIO-poort.
+
+Bij een geslaagde proef kunnen de getallen zonder eenheid uit de cloud komen.
+Vergelijk `station_day_generation` en `station_total_generation` met dezelfde
+waarden op de SEMS+-stationpagina. Stel **pas daarna** `GOODWE_TOTAL_UNIT=kWh`
+of `MWh` in de lokale `.env` in. De PV-dienst weigert te starten als deze
+eenheid ontbreekt. Expliciete eenheden in de API-uitvoer worden altijd zelf
+omgerekend. Het huidige vermogen uit `powerflow.pv` wordt als watt gelezen;
+als dit veld ontbreekt, blijft `current_w` leeg. De oude `inverter_*`-velden
+zijn voor dit omvormermodel niet nodig.
+
+De PV-dienst gebruikt het ophaaltijdstip als meettijd. SEMS+ geeft hier geen
+betrouwbare bron-tijdstempel terug. Na bevestiging van de eenheid kun je de
+PV-buffer en synchronisatie apart starten, zonder de P1- of waterlezer te
+stoppen:
+
+```sh
+cd /home/utility-logging
+git pull --ff-only
+docker compose build pv pv-sync
+docker compose run --rm --no-deps pv-sync python -m nuts.sync_check
+docker compose --profile pv up -d pv pv-sync
+docker compose ps pv pv-sync
+docker compose logs --tail=30 pv pv-sync
+```
+
+De synchronisatieproef gebruikt tijdelijke SQLite-bestanden en draait de
+testrecords in MariaDB terug. `pv` en `pv-sync` delen alleen hun eigen
+persistente map `data/pv/`. Bij een cloudfout blijft de dienst draaien en
+probeert hij na het ingestelde interval opnieuw. Bij een NAS-storing blijft
+de PV-uitlezing in SQLite staan tot `pv-sync` deze kan afleveren.
 
 ## Huidige testgrens
 

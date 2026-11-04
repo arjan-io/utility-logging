@@ -21,9 +21,11 @@ P1_COLUMNS = (
     "current_l3_a", "meter_tariff_code",
 )
 WATER_COLUMNS = ("event_id", "measured_at_utc", "event_kind", "liters")
+PV_COLUMNS = ("event_id", "measured_at_utc", "generated_total_kwh", "current_w")
 SCHEMAS = {
     "p1": "p1_outbox.sql",
     "water": "water_outbox.sql",
+    "pv": "pv_outbox.sql",
 }
 
 
@@ -57,7 +59,7 @@ class Outbox:
 
     @property
     def _table(self) -> str:
-        return "p1_outbox" if self.kind == "p1" else "water_outbox"
+        return "{}_outbox".format(self.kind)
 
     def close(self) -> None:
         with self._lock:
@@ -95,6 +97,22 @@ class Outbox:
             "liters": 1 if kind == "pulse" else 0,
         }
         self._insert_or_verify(WATER_COLUMNS, values)
+        return values["event_id"]
+
+    def add_pv(self, generated_total_kwh: str, current_w: Optional[int] = None,
+               measured_at_utc: Optional[str] = None,
+               event_id: Optional[str] = None) -> str:
+        if self.kind != "pv":
+            raise ValueError("Dit is geen PV-buffer")
+        if generated_total_kwh is None:
+            raise ValueError("PV-totaalstand ontbreekt")
+        values = {
+            "event_id": event_id or str(uuid4()),
+            "measured_at_utc": measured_at_utc or utc_timestamp(),
+            "generated_total_kwh": str(generated_total_kwh),
+            "current_w": current_w,
+        }
+        self._insert_or_verify(PV_COLUMNS, values)
         return values["event_id"]
 
     def _insert_or_verify(self, columns, values) -> None:

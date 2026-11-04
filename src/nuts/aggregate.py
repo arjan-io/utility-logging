@@ -106,7 +106,7 @@ def build_daily(day, p1_rows, water_rows, pv_rows):
     if pv_rows:
         samples = [(aware(row["measured_at_utc"]), row["generated_total_kwh"])
                    for row in pv_rows]
-        value, quality = cumulative_daily(samples, day, day)[day]
+        value, quality = cumulative_daily(samples, day, day, 900)[day]
         result["pv_generated_kwh"] = value
         result["pv_quality"] = quality
         result["pv_source"] = "meter_derived"
