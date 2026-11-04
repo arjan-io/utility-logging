@@ -77,7 +77,18 @@ Het Dockerfile heeft geen vastgelegde CPU-architectuur: Docker kiest op de
    voorbeeld. Bewaar `.env` en de map `data/` buiten Git. Zet `DATA_DIR`
    op een blijvende locatie op de Pi.
 3. Bouw de image met `docker compose build`. Controleer de lokale
-   configuratie met `docker compose config --quiet`.
+   configuratie met `docker compose config --quiet`. Test daarna de
+   NAS-verbinding en schrijfrechten zonder meetapparaten te openen:
+
+   ```sh
+   docker compose run --rm --no-deps p1-sync python -m nuts.dbcheck
+   ```
+
+   Deze proef schrijft met de containergebruiker één P1- en één waterrecord
+   binnen een InnoDB-transactie en draait die terug. Verwacht een `OK`-regel.
+   Vul eerst de echte NAS-gegevens in `.env` in; deel dat bestand nooit.
+   De melding dat Buildx ontbreekt is bij een native build op de Pi alleen
+   een waarschuwing zolang beide images met `Successfully built` eindigen.
 4. Start de twee onafhankelijke synchronisatoren met
    `docker compose up -d p1-sync water-sync`. Start voor een MQTT-proef
    `docker compose --profile publish up -d publisher`; laat de prefix op
