@@ -16,6 +16,7 @@ apart aangeleverd en door de beheerder zelf uitgevoerd.
 | `water-sync` | Stuurt alleen waterevents naar MariaDB en herhaalt veilig na een storing. |
 | `aggregate` | Berekent gesloten dagen en maanden voor grafieken, met onbekende waarden bij meetgaten. |
 | `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
+| `pv-probe` | Leest eenmalig een GoodWe SEMS+-station zonder data op te slaan. |
 
 De oude MQTT-velden blijven beschikbaar. Met `MQTT_PREFIX=sensors/v2`
 verschijnen ze eerst onder proefonderwerpen. Pas bij de definitieve
@@ -138,6 +139,32 @@ dezelfde poort of pin tegelijk met de oude scripts opent. P1 en water
 hebben ieder een eigen containerpaar en een eigen SQLite-map. Een storing
 in de ene meetbuffer stopt de andere synchronisator niet. Een SQLite-buffer
 helpt bij NAS-uitval; een uitgeschakelde Pi kan geen waterpulsen tellen.
+
+## GoodWe SEMS+ controleren
+
+De oude SEMS Classic-uitlezing werkt niet meer. De zakelijke
+[GoodWe OpenAPI](https://openapi.goodwe.com/#/api/doc-10a00bfcb2c270)
+vereist een afzonderlijke Client ID en Client Secret. Voor een bestaande
+SEMS+-login gebruikt de `pv-probe` een Python-bibliotheek voor de
+SEMS+-webinterface. Die interface is niet officieel gedocumenteerd en kan
+veranderen. De proef leest alleen en schrijft niets naar MariaDB of MQTT.
+
+Vul `GOODWE_STATION_ID`, `GOODWE_ACCOUNT` en `GOODWE_PASSWORD` uitsluitend
+in de lokale `.env` op de Pi in. De station-ID staat in de URL van de
+SEMS+-stationpagina; een eerder Classic-stationnummer kan na migratie ook
+werken. Deel de `.env` en ruwe API-antwoorden niet. Voer dan uit:
+
+```sh
+cd /home/utility-logging
+docker compose --profile pv build pv-probe
+docker compose --profile pv run --rm --no-deps pv-probe
+```
+
+Verwacht één JSON-regel met alleen numerieke velden voor huidig PV-vermogen
+en opgewekte energie. Ontbrekende velden krijgen `null`. De PV-proef heeft
+een eigen Python 3.12-image, omdat `pygoodwe` dat vereist. De officiële
+image ondersteunt ARMv7 op de huidige 32-bit Pi en ARM64 op een latere Pi.
+`pv-probe` blijft na afloop niet draaien en opent geen seriële of GPIO-poort.
 
 ## Huidige testgrens
 
