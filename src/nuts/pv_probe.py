@@ -106,17 +106,15 @@ def main():
         readings = inverter.get_current_readings(maxretries=1)
         result = summarize(readings)
         result["station_day_fallback"] = None
-        result["fallback_status"] = "not_needed"
-        if not result["energy_counters_available"]:
-            try:
-                result["station_day_fallback"] = probe_station_daily(inverter, station_id)
-                result["fallback_status"] = (
-                    "available" if result["station_day_fallback"] is not None else "unavailable"
-                )
-            except SemsPlusError as exc:
-                result["fallback_status"] = exc.kind.value
-            except Exception:
-                result["fallback_status"] = "error"
+        try:
+            result["station_day_fallback"] = probe_station_daily(inverter, station_id)
+            result["fallback_status"] = (
+                "available" if result["station_day_fallback"] is not None else "unavailable"
+            )
+        except SemsPlusError as exc:
+            result["fallback_status"] = exc.kind.value
+        except Exception:
+            result["fallback_status"] = "error"
         if all(result[key] is None for key in (
                 "pv_flow", "station_day_generation", "station_total_generation",
                 "inverter_day_generation", "inverter_total_generation",
