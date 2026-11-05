@@ -240,30 +240,56 @@ def costs_for_period(repo, commodity, day, start, end, complete_day):
     return volume * rates["low"] if volume is not None else None
 
 
-def build_payloads(repo, now=None):
+TOPICS = ("dsmr/electricity", "dsmr/kosten", "dsmr/gas", "water")
+
+
+def build_payloads(repo, now=None, topics=None):
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
         raise ValueError("now moet een tijdzone hebben")
+    wanted = set(TOPICS if topics is None else topics)
+    if not wanted.issubset(TOPICS):
+        raise ValueError("Onbekend MQTT-onderwerp")
     today = now.astimezone(LOCAL).date()
     yesterday = today - timedelta(days=1)
     periods = ((today, day_start_utc(today), now, False),
                (yesterday, day_start_utc(yesterday), day_start_utc(today), True))
     costs = {}
-    for commodity in ("electricity", "gas", "water"):
-        costs[commodity] = [money(costs_for_period(repo, commodity, *period))
-                            for period in periods]
-    latest = repo.latest_p1()
-    return {
-        "dsmr/electricity": electricity_payload(latest),
-        "dsmr/kosten": {"kostenVandaag": costs["electricity"][0],
-                         "kostenGister": costs["electricity"][1]},
-        "dsmr/gas": {"rate": repo.gas_rate(now),
-                     "costsToday": costs["gas"][0],
-                     "costsYesterday": costs["gas"][1]},
-        "water": {"rate": round(repo.water_flow(now), 2),
-                  "costsToday": costs["water"][0],
-                  "costsYesterday": costs["water"][1]},
-    }
+    for suffix, commodity in (("dsmr/kosten", "electricity"),
+                              ("dsmr/gas", "gas"), ("water", "water")):
+        if suffix in wanted:
+            costs[commodity] = [money(costs_for_period(repo, commodity, *period))
+                                for period in periods]
+    payloads = {}
+    if "dsmr/electricity" in wanted:
+        payloads["dsmr/electricity"] = electricity_payload(repo.latest_p1())
+    if "dsmr/kosten" in wanted:
+        payloads["dsmr/kosten"] = {
+            "kostenVandaag": costs["electricity"][0],
+            "kostenGister": costs["electricity"][1]}
+    if "dsmr/gas" in wanted:
+        payloads["dsmr/gas"] = {
+            "rate": repo.gas_rate(now), "costsToday": costs["gas"][0],
+            "costsYesterday": costs["gas"][1]}
+    if "water" in wanted:
+        payloads["water"] = {
+            "rate": round(repo.water_flow(now), 2),
+            "costsToday": costs["water"][0],
+            "costsYesterday": costs["water"][1]}
+    return payloads
+
+
+def publish_available(repo, send, now=None):
+    """Keep a failed source from suppressing the remaining MQTT topics."""
+    errors = {}
+    for suffix in TOPICS:
+        try:
+            payload = build_payloads(repo, now=now, topics=(suffix,))[suffix]
+            if payload is not None:
+                send(suffix, payload)
+        except Exception as exc:
+            errors[suffix] = exc
+    return errors
 
 
 def run_forever():
@@ -286,15 +312,18 @@ def run_forever():
         try:
             connection = mysql.connector.connect(**config)
             try:
-                payloads = build_payloads(MeterRepository(connection))
+                repo = MeterRepository(connection)
+                def send(suffix, payload):
+                    publish.single(prefix + "/" + suffix,
+                                   payload=json.dumps(payload), hostname=mqtt_host,
+                                   port=mqtt_port, auth=auth, qos=1)
+
+                errors = publish_available(repo, send)
+                for suffix, exc in errors.items():
+                    print("Publisher {} wacht: {}".format(
+                        suffix, type(exc).__name__), flush=True)
             finally:
                 connection.close()
-            for suffix, payload in payloads.items():
-                if payload is None:
-                    continue
-                publish.single(prefix + "/" + suffix,
-                               payload=json.dumps(payload), hostname=mqtt_host,
-                               port=mqtt_port, auth=auth, qos=1)
             time.sleep(30)
         except Exception as exc:
             print("Publisher wacht: {}".format(exc), flush=True)
