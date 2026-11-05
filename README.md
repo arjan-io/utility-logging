@@ -205,6 +205,22 @@ persistente map `data/pv/`. Bij een cloudfout blijft de dienst draaien en
 probeert hij na het ingestelde interval opnieuw. Bij een NAS-storing blijft
 de PV-uitlezing in SQLite staan tot `pv-sync` deze kan afleveren.
 
+`pv` publiceert na iedere bruikbare SEMS+-uitlezing ook naar
+`sensors/v2/pv` (of `<MQTT_PREFIX>/pv`). De velden `pv[0].pac` (watt) en
+`pv[0].eDag` (kWh) hebben hetzelfde JSON-pad als het oude GoodWe-script.
+`measuredAtUtc` is het ophaaltijdstip, niet de onbekende meettijd in de
+cloud. Als de dagteller tijdelijk ontbreekt, blijft de laatst ontvangen
+dagwaarde voor dezelfde lokale dag beschikbaar en wordt
+`dayGenerationFresh=false`. Als de cumulatieve teller ontbreekt maar het
+huidige vermogen wel aanwezig is, verschijnt het vermogen toch op MQTT;
+zo'n meting krijgt geen MariaDB-record. Bij een MQTT-storing blijft de
+SQLite-opslag werken.
+
+Met `GOODWE_POLL_SECONDS=60` begint een nieuwe opvraag ongeveer iedere
+minuut. Duurt een cloudopvraag langer dan een minuut, dan begint de
+volgende meteen na afloop. Het interval beschrijft de opvragen; de cloud
+kan dezelfde meetwaarde meermaals teruggeven.
+
 ## Huidige testgrens
 
 De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
