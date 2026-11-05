@@ -40,7 +40,14 @@ def parse_station_reading(data, implicit_total_unit):
     kpi = data.get("kpi") or {}
     if not isinstance(kpi, dict):
         raise ValueError("SEMS+ KPI-velden ontbreken")
-    amount, unit = _quantity(kpi.get("total_power"),
+    inverter = data.get("inverter") or {}
+    if isinstance(inverter, list):
+        inverter = inverter[0] if len(inverter) == 1 else {}
+    full = inverter.get("invert_full") if isinstance(inverter, dict) else None
+    total_value = kpi.get("total_power")
+    if total_value is None and isinstance(full, dict):
+        total_value = full.get("etotal")
+    amount, unit = _quantity(total_value,
                              {"Wh", "kWh", "MWh"}, implicit_total_unit)
     factor = {"Wh": Decimal("0.001"), "kWh": Decimal(1),
               "MWh": Decimal(1000)}[unit]
@@ -80,6 +87,8 @@ def run_forever():
                 timestamp = utc_timestamp()
                 total, current_w = parse_station_reading(data, unit)
                 outbox.add_pv(total, current_w, timestamp)
+            except ValueError as exc:
+                print("PV-waarde onbruikbaar: {}".format(exc), flush=True)
             except Exception as exc:
                 print("PV-uitlezing wacht op SEMS+: {}".format(type(exc).__name__), flush=True)
             time.sleep(interval)

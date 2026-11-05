@@ -12,7 +12,7 @@ from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 
-_NUMERIC = re.compile(r"\s*([+-]?\d+(?:\.\d+)?)\s*(?:\(?(W|kW|Wh|kWh)\)?)?\s*")
+_NUMERIC = re.compile(r"\s*([+-]?\d+(?:\.\d+)?)\s*(?:\(?(W|kW|Wh|kWh|MWh)\)?)?\s*")
 
 
 def _number(value):
@@ -49,14 +49,19 @@ def summarize(data):
     inverter = data.get("inverter") or {}
     if isinstance(inverter, list):
         inverter = inverter[0] if inverter else {}
-    details = inverter.get("d") or {} if isinstance(inverter, dict) else {}
+    details = (inverter.get("invert_full") or inverter.get("d") or {}) if isinstance(inverter, dict) else {}
+    station_day = _first(kpi, "power", "day_power")
+    station_total = _first(kpi, "total_power", "totalPower")
+    inverter_day = _first(details, "eday", "eDay", "e_day")
+    inverter_total = _first(details, "etotal", "eTotal", "e_total")
     return {
         "retrieved_at_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "pv_flow": _first(powerflow, "pv"),
-        "station_day_generation": _first(kpi, "power", "day_power"),
-        "station_total_generation": _first(kpi, "total_power", "totalPower"),
-        "inverter_day_generation": _first(details, "eDay", "eday", "e_day"),
-        "inverter_total_generation": _first(details, "eTotal", "etotal", "e_total"),
+        "station_day_generation": station_day,
+        "station_total_generation": station_total,
+        "inverter_day_generation": inverter_day,
+        "inverter_total_generation": inverter_total,
+        "energy_counters_available": station_total is not None or inverter_total is not None,
     }
 
 
@@ -79,7 +84,9 @@ def main():
         )
         readings = inverter.get_current_readings(maxretries=1)
         result = summarize(readings)
-        if all(value is None for key, value in result.items() if key != "retrieved_at_utc"):
+        if all(result[key] is None for key in (
+                "pv_flow", "station_day_generation", "station_total_generation",
+                "inverter_day_generation", "inverter_total_generation")):
             raise ValueError("Geen bruikbare PV-velden in de SEMS+-uitlezing")
     except Exception as exc:
         print("GoodWe-proef mislukt ({}). Geen ruwe API-data of tokens delen.".format(

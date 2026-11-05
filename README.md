@@ -163,7 +163,11 @@ docker compose --profile pv run --rm --no-deps pv-probe
 ```
 
 Verwacht één JSON-regel met alleen numerieke velden voor huidig PV-vermogen
-en opgewekte energie. Ontbrekende velden krijgen `null`. De PV-proef heeft
+en opgewekte energie. Ontbrekende velden krijgen `null`;
+`energy_counters_available=false` betekent dat SEMS+ bij die opvraag geen
+bruikbare cumulatieve stand leverde. Herhaal de proef later. De collector
+slaat zo'n onvolledig antwoord niet op en probeert bij de volgende cyclus
+opnieuw. De PV-proef heeft
 een eigen Python 3.12-image, omdat `pygoodwe` dat vereist. De officiële
 image ondersteunt ARMv7 op de huidige 32-bit Pi en ARM64 op een latere Pi.
 `pv-probe` blijft na afloop niet draaien en opent geen seriële of GPIO-poort.
