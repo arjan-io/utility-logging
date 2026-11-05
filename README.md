@@ -20,6 +20,10 @@ apart aangeleverd en door de beheerder zelf uitgevoerd.
 | `pv` | Vraagt SEMS+ periodiek uit en bewaart de cumulatieve opbrengst in een eigen SQLite-buffer. |
 | `pv-sync` | Stuurt PV-metingen onafhankelijk naar MariaDB en herhaalt na NAS-uitval. |
 
+De eenmalige historische importer is ook in de standaardimage opgenomen.
+Hij draait niet als achtergrondservice en begint zonder `--apply` in
+alleen-lezen proefmodus.
+
 De oude MQTT-velden blijven beschikbaar. Met `MQTT_PREFIX=sensors/v2`
 verschijnen ze eerst onder proefonderwerpen. Pas bij de definitieve
 omschakeling wordt de prefix `sensors` gebruikt. De kosten zijn momenteel
@@ -221,14 +225,51 @@ minuut. Duurt een cloudopvraag langer dan een minuut, dan begint de
 volgende meteen na afloop. Het interval beschrijft de opvragen; de cloud
 kan dezelfde meetwaarde meermaals teruggeven.
 
+## Historische import voorbereiden
+
+De importer leest oude P1- en watermetingen, de bestaande dag- en
+maandtotalen en `nuts-pv.opbrengst`. Oude maanden blijven maandregels;
+ontbrekende dagen worden niet uit een maandbedrag afgeleid. Ruwe
+waterrijen met 0 liter blijven tijdankers. Waar opeenvolgende nulmetingen
+een hele lokale dag of maand dekken, krijgen de ruwe pulsen voorrang op de
+oude waterberekening. Bij gaten blijft het oude totaal hoogstens als
+`estimated` beschikbaar; zonder oud totaal blijft de periode onbekend.
+De import gebruikt vaste
+event-ID's per oude bronrij, zodat een herhaling geen dubbele ruwe
+metingen maakt. De oude PV-dagwaarde `eDag` en de laatst opgeslagen
+maandstand `eMaand` krijgen de kwaliteit `estimated`.
+
+Voor de controle heeft de container leesrechten op de oude databases
+nodig. Zet zo nodig een bestaand alleen-lezen account in
+`LEGACY_DB_USER` en `LEGACY_DB_PASSWORD` in de lokale `.env`. De
+schrijfgebruiker voor `nuts_v2` blijft `DB_USER`. De onderstaande proef
+leest de oude tabellen en schrijft niets:
+
+```sh
+cd /home/utility-logging
+docker compose build p1-sync
+docker compose run --rm --no-deps p1-sync python -m nuts.import_legacy
+```
+
+Controleer de gemelde aantallen, datums, dubbelen en waarschuwingen. De
+eenheid van de **oude** PV-kolommen moet afzonderlijk worden bevestigd;
+`GOODWE_TOTAL_UNIT` beschrijft alleen de nieuwe cloudwaarden. De
+uitvoermodus vereist daarom expliciet `--pv-unit kWh` of `--pv-unit MWh`
+naast `--apply`. Gebruik die modus pas na een verse backup en een
+geslaagde proef op de brongegevens. De importer verwerkt ruwe rijen in
+kleine transacties en kan na onderbreking opnieuw worden gestart.
+
 ## Huidige testgrens
 
 De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
-NAS-uitval getest. Een P1- en waterinsert met rollback is vanuit een
-container op de 32-bit Pi bevestigd. Beide synchronisatiecontainers zijn
-op de Pi gestart en hebben hun SQLite-buffer aangemaakt. Een echte
-SQLite-naar-MariaDB-proef, GPIO-toegang en de P1-poort moeten nog worden
-getest. Gebruik deze versie nog niet als vervanging van de oude lezers.
+NAS-uitval getest. Een P1- en waterinsert met rollback en de weg van
+tijdelijke SQLite-records naar MariaDB met rollback zijn vanuit een
+container op de 32-bit Pi bevestigd. Beide synchronisatiecontainers
+draaien. PV wordt live naar MariaDB gestuurd; de recente rijen kwamen
+meestal ongeveer iedere minuut binnen. De nieuwe PV-MQTT-publicatie,
+historische importer en dagaggregatie zijn nog niet op echte gegevens
+gecontroleerd. GPIO-toegang en de P1-poort worden pas bij de overdracht
+aan de nieuwe lezers getest.
 
 Er staan geen wachtwoorden, database-exports of persoonlijke
 migratienotities in deze repository.

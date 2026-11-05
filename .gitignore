@@ -29,6 +29,4 @@ docs/
 sql/
 tests/
 .github/
-src/nuts/history.py
-src/nuts/import_legacy.py
 src/nuts/simulate.py
