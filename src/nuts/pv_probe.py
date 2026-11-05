@@ -10,6 +10,7 @@ import re
 import sys
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
+from zoneinfo import ZoneInfo
 
 
 _NUMERIC = re.compile(r"\s*([+-]?\d+(?:\.\d+)?)\s*(?:\(?(W|kW|Wh|kWh|MWh)\)?)?\s*")
@@ -65,6 +66,25 @@ def summarize(data):
     }
 
 
+def probe_station_daily(inverter, station_id, now_local=None):
+    """Try the separate SEMS+ station production endpoint, read-only."""
+    now_local = now_local or datetime.now(ZoneInfo("Europe/Amsterdam"))
+    start = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = start.replace(hour=23, minute=59, second=59)
+    payload = {
+        "stationId": station_id,
+        "items": ["proSystemTotalStats"],
+        "dimension": "day",
+        "isReport": False,
+        "startTime": start.strftime("%Y-%m-%d %H:%M:%S"),
+        "endTime": end.strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    data = inverter._web_client().request(
+        "/sems-plant/api/stations/production", method="POST", payload=payload,
+    )
+    return _first(data, "proSystemTotalStats", "production")
+
+
 def main():
     station_id = os.getenv("GOODWE_STATION_ID")
     account = os.getenv("GOODWE_ACCOUNT")
@@ -75,6 +95,7 @@ def main():
 
     try:
         from pygoodwe import SingleInverter
+        from pygoodwe.sems_plus import SemsPlusError
 
         inverter = SingleInverter(
             system_id=station_id,
@@ -84,9 +105,22 @@ def main():
         )
         readings = inverter.get_current_readings(maxretries=1)
         result = summarize(readings)
+        result["station_day_fallback"] = None
+        result["fallback_status"] = "not_needed"
+        if not result["energy_counters_available"]:
+            try:
+                result["station_day_fallback"] = probe_station_daily(inverter, station_id)
+                result["fallback_status"] = (
+                    "available" if result["station_day_fallback"] is not None else "unavailable"
+                )
+            except SemsPlusError as exc:
+                result["fallback_status"] = exc.kind.value
+            except Exception:
+                result["fallback_status"] = "error"
         if all(result[key] is None for key in (
                 "pv_flow", "station_day_generation", "station_total_generation",
-                "inverter_day_generation", "inverter_total_generation")):
+                "inverter_day_generation", "inverter_total_generation",
+                "station_day_fallback")):
             raise ValueError("Geen bruikbare PV-velden in de SEMS+-uitlezing")
     except Exception as exc:
         print("GoodWe-proef mislukt ({}). Geen ruwe API-data of tokens delen.".format(

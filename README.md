@@ -165,7 +165,9 @@ docker compose --profile pv run --rm --no-deps pv-probe
 Verwacht één JSON-regel met alleen numerieke velden voor huidig PV-vermogen
 en opgewekte energie. Ontbrekende velden krijgen `null`;
 `energy_counters_available=false` betekent dat SEMS+ bij die opvraag geen
-bruikbare cumulatieve stand leverde. Herhaal de proef later. De collector
+bruikbare cumulatieve stand leverde. De proef vraagt dan ook de afzonderlijke
+dagopbrengst van het station op onder `station_day_fallback`, met een korte
+`fallback_status`. Herhaal de proef later als ook die ontbreekt. De collector
 slaat zo'n onvolledig antwoord niet op en probeert bij de volgende cyclus
 opnieuw. De PV-proef heeft
 een eigen Python 3.12-image, omdat `pygoodwe` dat vereist. De officiële
