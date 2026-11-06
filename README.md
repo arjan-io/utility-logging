@@ -273,6 +273,14 @@ de ingevoerde beheernaam en het wachtwoord. De pagina kan draaien terwijl
 de oude P1- en waterlezers actief blijven; ze gebruikt geen GPIO of
 seriële poort.
 
+Kies op de tarievenpagina **Bedrag invoeren**. Kies vervolgens de regel die
+op de tariefkaart staat, bijvoorbeeld "Gas per m³" of "Vaste
+terugleverkosten per maand". Vul bron, bedrag, eenheid (waar nodig), btw en
+ingangsdatum in. Bij vaste terugleverkosten kun je ook een kWh-band
+opgeven. De pagina vult onderdeel, richting en telwerk zelf in en slaat de
+regel meteen actief op. Het uitgebreide formulier blijft beschikbaar voor
+uitzonderingen.
+
 Voer bedragen in met hun **oorspronkelijke eenheid**. Een leverancier kan
 €5,99 per maand vragen, een netbeheerder €266,63 per jaar en de
 belastingvermindering kan als negatief jaarbedrag zijn opgegeven. De
@@ -285,15 +293,16 @@ uit €0,15010 levering plus €0,11085 belasting = €0,26095/kWh;
 stroom dal uit €0,14768 plus €0,11085 = €0,25853/kWh; gas uit
 €0,71510 plus €0,72680 = €1,44190/m³. Voer die totaaltarieven niet
 nogmaals als aparte regel in. Maak eerst een contract of bron, dan de
-tariefregels als concept. Activeer pas na controle van bedrag, btw,
+tariefregels met de eenvoudige route. Controleer daarbij bedrag, btw,
 eenheid en datum. Regels met een verbruiksband en de afrekening van
 saldering staan afzonderlijk; het eenvoudige overzicht telt die niet
 bij de actuele variabele afnametarieven op.
 
 Een fout concept kun je met **Concept verwerpen** buiten gebruik stellen.
-Het blijft als administratief spoor bewaard en telt niet mee. Een actief
-tarief wordt niet verwijderd; maak voor een correctie een nieuwe regel
-met dezelfde naam en de juiste ingangsdatum en activeer die.
+Een verkeerd actief tarief kun je via **Intrekken** met bevestiging buiten
+gebruik stellen en opnieuw invoeren. Beide regels blijven in het overzicht
+staan; ingetrokken regels tellen niet meer mee. Een normaal opvolgend tarief
+kun je meteen invoeren met zijn eigen ingangsdatum.
 
 Voor **Teruglevering boven verbruik (geen btw)** staat bij stap 4 een kort
 formulier. Kies de stroomleverancier, vul de vergoeding als negatief bedrag

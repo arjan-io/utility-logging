@@ -375,7 +375,7 @@ def save_rule(connection, form, actor):
         SELECT COALESCE(MAX(revision),0) AS revision FROM tariff_rule
         WHERE tariff_source_id=%s AND code=%s AND valid_from=%s
     """, (rule["source_id"], rule["code"], rule["valid_from"]))
-    execute(connection, """
+    return execute(connection, """
         INSERT INTO tariff_rule
         (tariff_source_id, code, component, flow, register_code, basis,
          amount_eur, includes_vat, vat_rate, valid_from, valid_until,
@@ -444,6 +444,17 @@ def discard_rule(connection, rule_id):
     if rule is None or rule["status"] != "draft":
         raise InputError("Alleen een concept kan worden verworpen")
     note = ("[verworpen] " + (rule["notes"] or ""))[:255]
+    execute(connection, """
+        UPDATE tariff_rule SET status='superseded', notes=%s WHERE id=%s
+    """, (note, rule_id))
+
+
+def withdraw_rule(connection, rule_id):
+    rule = one(connection, "SELECT status, notes FROM tariff_rule WHERE id=%s FOR UPDATE",
+               (rule_id,))
+    if rule is None or rule["status"] != "active":
+        raise InputError("Alleen een actief tarief kan worden ingetrokken")
+    note = ("[ingetrokken] " + (rule["notes"] or ""))[:255]
     execute(connection, """
         UPDATE tariff_rule SET status='superseded', notes=%s WHERE id=%s
     """, (note, rule_id))

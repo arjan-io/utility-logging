@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlsplit
 from zoneinfo import ZoneInfo
 
-from . import advance_admin, advance_logic, tariff_logic as logic
+from . import advance_admin, advance_logic, tariff_logic as logic, tariff_quick
 
 
 TOKEN = secrets.token_urlsafe(32)
@@ -207,8 +207,12 @@ def page(connection, message=""):
                       '<input type="hidden" name="id" value="{}">'
                       '<button class="muted">Concept verwerpen</button></form>').format(
                           csrf_field(), row["id"], csrf_field(), row["id"])
+        elif row["status"] == "active":
+            action = '<a href="/withdraw?id={}">Intrekken</a>'.format(row["id"])
         status_label = ("verworpen concept" if row["status"] == "superseded"
                         and (row["notes"] or "").startswith("[verworpen]") else
+                        "ingetrokken" if row["status"] == "superseded"
+                        and (row["notes"] or "").startswith("[ingetrokken]") else
                         row["status"])
         rule_rows.append(
             "<tr><td>{} · {} · {}</td><td>{}<small>{} · {} · {}{}</small></td>"
@@ -238,7 +242,7 @@ table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1
 .scroll{{overflow-x:auto}}small{{display:block;color:#586c78}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
 .hint{{color:#425863}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1rem}}
 .example{{background:#f0f6f7;border-left:4px solid #08736f;padding:.7rem 1rem;margin:.7rem 0}}
-</style><main><nav><a href="/advances">Voorschotten →</a></nav><h1>Tarievenbeheer</h1>
+</style><main><nav><a href="/new">Bedrag invoeren →</a> · <a href="/advances">Voorschotten</a></nav><h1>Tarievenbeheer</h1>
 <p class="hint">Stroom, gas en water hebben elk hun eigen contractlijn. Netbeheer en overheid zijn
 aparte bronnen. Bedragen blijven in de opgegeven eenheid bewaard.</p>{message}
 <section><h2>Actieve tarieven op {today}</h2>
@@ -281,6 +285,7 @@ Herhaal voor gas als die tarieven anders zijn.</p>
 <div class="field"><label for="source-kind">Wie berekent dit?</label><select id="source-kind" name="source_kind">{source_kinds}</select></div>
 <div class="field"><label for="source-name">Naam van de bron</label><input id="source-name" name="source_name" maxlength="120" required></div></div>
 <button>Bron opslaan</button></form><div class="scroll"><table><tr><th>Soort</th><th>Bron</th><th>Naam</th></tr>{sources}</table></div></section>
+<details><summary>Uitgebreide tariefinvoer voor uitzonderingen</summary>
 <section><h2>4. Bedragen uit je tariefkaart</h2>
 <p class="hint">Maak voor <strong>ieder bedrag</strong> een eigen tariefregel. Kies eerst wie het
 bedrag rekent: leverancier uit stap 1, netbeheerder of overheid uit stap 3.
@@ -343,10 +348,10 @@ teruglevering, vul ook de band in; die wordt pas bij de afrekening bepaald.</p>
 <div class="field"><label for="rule-band-from">Band vanaf</label><input id="rule-band-from" name="band_from" inputmode="decimal"></div>
 <div class="field"><label for="rule-band-until">Band tot</label><input id="rule-band-until" name="band_until" inputmode="decimal"></div>
 <div class="field"><label for="rule-notes">Toelichting</label><input id="rule-notes" name="notes" maxlength="255"></div></div></details>
-<button>Tarief als concept opslaan</button></form></section>
+<button>Tarief als concept opslaan</button></form></section></details>
 <section><h2>Opgeslagen tariefregels</h2><p class="hint">Controleer bron, bedrag, btw, richting, telwerk, eenheid en datum voordat je activeert.
-Een concept kun je verwerpen; het telt dan niet mee. Een actief tarief blijft bewaard voor de historie.
-Een correctie voer je in als nieuwe regel met dezelfde naam en de juiste ingangsdatum.</p>
+Een concept kun je verwerpen; het telt dan niet mee. Een verkeerd ingevoerd actief tarief
+kun je intrekken en opnieuw invoeren. Ingetrokken regels blijven zichtbaar voor de historie.</p>
 <div class="scroll"><table><tr><th>Bron</th><th>Onderdeel</th><th>Bedrag</th><th>Periode</th><th>Status</th><th></th></tr>{rules}</table></div></section>
 </main></html>""".format(
         message='<p class="notice">{}</p>'.format(esc(message)) if message else "",
@@ -361,6 +366,36 @@ Een correctie voer je in als nieuwe regel met dezelfde naam en de juiste ingangs
         registers=options(logic.REGISTERS), bases=options(logic.BASES),
         bands='<option value="">Geen</option>' + options(logic.BANDS[1:]),
         rules="".join(rule_rows))
+
+
+def withdrawal_page(connection, rule_id):
+    rule = logic.one(connection, """
+        SELECT r.status, r.amount_eur, r.basis, r.valid_from, r.valid_until,
+               r.code, s.source_name
+        FROM tariff_rule r JOIN tariff_source s ON s.id=r.tariff_source_id
+        WHERE r.id=%s
+    """, (rule_id,))
+    if rule is None or rule["status"] != "active":
+        raise logic.InputError("Dit tarief is niet meer actief")
+    return '''<!doctype html><html lang="nl"><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tarief intrekken</title>
+<style>body{{font:16px system-ui,sans-serif;max-width:650px;margin:2rem auto;padding:0 1rem;color:#183242}}
+button{{background:#9f352b;color:white;border:0;border-radius:6px;padding:.7rem 1rem;cursor:pointer}}
+.card{{border:1px solid #c6d5dd;border-radius:12px;padding:1rem;margin:1rem 0}}</style>
+<main><p><a href="/">← Tarievenoverzicht</a></p><h1>Tarief intrekken</h1>
+<div class="card"><strong>{source}</strong><p>{code}: €{amount} {basis}<br>
+Vanaf {start} tot {end}</p></div>
+<p>Dit tarief telt daarna niet meer mee. De regel blijft zichtbaar in de historie.
+Voer het juiste tarief daarna opnieuw in.</p>
+<form method="post" action="/withdraw">{csrf}
+<input type="hidden" name="id" value="{id}">
+<input type="hidden" name="confirm" value="1"><button>Ja, dit tarief intrekken</button></form>
+</main></html>'''.format(
+        source=esc(rule["source_name"]), code=esc(rule["code"]),
+        amount=esc(rule["amount_eur"]), basis=esc(LABELS[rule["basis"]]),
+        start=esc(rule["valid_from"]), end=esc(rule["valid_until"] or "volgende invoer"),
+        csrf=csrf_field(), id=rule_id)
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -400,19 +435,32 @@ class Handler(BaseHTTPRequestHandler):
         if not self.require_auth():
             return
         path = urlsplit(self.path).path
-        if path not in ("/", "/advances"):
+        if path not in ("/", "/advances", "/new", "/withdraw"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         connection = None
         started = time.monotonic()
         connected = started
         try:
-            connection = database()
-            connected = time.monotonic()
-            notice = parse_qs(urlsplit(self.path).query).get("notice", [""])[0]
-            rendered = (page(connection, notice[:200]) if path == "/" else
-                        advance_admin.page(connection, TOKEN, notice[:200]))
+            query = parse_qs(urlsplit(self.path).query)
+            notice = query.get("notice", [""])[0][:200]
+            selected = query.get("type", [""])[0]
+            if path != "/new" or selected in tariff_quick.TEMPLATES:
+                connection = database()
+                connected = time.monotonic()
+            if path == "/":
+                rendered = page(connection, notice)
+            elif path == "/advances":
+                rendered = advance_admin.page(connection, TOKEN, notice)
+            elif path == "/withdraw":
+                rendered = withdrawal_page(
+                    connection, logic.positive_id(query.get("id", [""])[0], "Tariefregel"))
+            else:
+                rendered = tariff_quick.page(connection, TOKEN, selected, notice)
             self.html(HTTPStatus.OK, rendered)
+        except logic.InputError as exc:
+            self.html(HTTPStatus.BAD_REQUEST,
+                      "<h1>Controleer invoer</h1><p>{}</p><p><a href='/'>Terug</a></p>".format(esc(exc)))
         except Exception as exc:
             print("Tarievenpagina: {}".format(exc), flush=True)
             self.html(HTTPStatus.SERVICE_UNAVAILABLE, "Database tijdelijk niet bereikbaar")
@@ -430,7 +478,7 @@ class Handler(BaseHTTPRequestHandler):
         path = urlsplit(self.path).path
         if path not in ("/contract", "/settlement", "/source", "/rule",
                         "/export-excess", "/feedin-fixed", "/activate", "/discard",
-                        "/advance", "/advance-void"):
+                        "/advance", "/advance-void", "/new", "/withdraw"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if self.headers.get("Content-Type", "").split(";", 1)[0] != "application/x-www-form-urlencoded":
@@ -474,16 +522,29 @@ class Handler(BaseHTTPRequestHandler):
                     advance_logic.void_schedule(
                         connection, logic.positive_id(form.get("id", ""), "Voorschot"))
                     message = "Voorschot verworpen; het telt niet mee."
+                elif path == "/new":
+                    label = tariff_quick.save_and_activate(
+                        connection, form, os.environ["TARIFF_ADMIN_USER"])
+                    message = "{} opgeslagen en geactiveerd.".format(label)
                 elif path == "/activate":
                     logic.activate_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
                     message = "Tariefregel geactiveerd; vorige regel met dezelfde naam afgesloten."
+                elif path == "/withdraw":
+                    if form.get("confirm") != "1":
+                        raise logic.InputError("Bevestig dat je dit tarief wilt intrekken")
+                    logic.withdraw_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
+                    message = "Tarief ingetrokken; voer de juiste regel opnieuw in."
                 else:
                     logic.discard_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
                     message = "Concept verworpen; het telt niet mee in de berekeningen."
                 connection.commit()
                 self.send_response(HTTPStatus.SEE_OTHER)
                 destination = "/advances" if path.startswith("/advance") else "/"
-                self.send_header("Location", destination + "?notice=" + quote(message))
+                if path == "/new":
+                    destination = "/new?type={}&notice=".format(quote(form["template"]))
+                else:
+                    destination += "?notice="
+                self.send_header("Location", destination + quote(message))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
             except Exception:
@@ -493,6 +554,8 @@ class Handler(BaseHTTPRequestHandler):
                 connection.close()
         except logic.InputError as exc:
             destination = "/advances" if path.startswith("/advance") else "/"
+            if path == "/new":
+                destination = "/new?type=" + quote(form.get("template", "")) if "form" in locals() else "/new"
             self.html(HTTPStatus.BAD_REQUEST,
                       "<h1>Controleer invoer</h1><p>{}</p><p><a href='{}'>Terug</a></p>".format(
                           esc(exc), destination))
