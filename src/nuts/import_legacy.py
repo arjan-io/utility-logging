@@ -77,6 +77,18 @@ def read_rows(cursor, query: str) -> List[Mapping[str, object]]:
     return [dict(zip(names, values)) for values in cursor.fetchall()]
 
 
+def exclude_pv_rows(rows, excluded_ids):
+    """Keep misdated source rows in MariaDB, but omit them from aggregates."""
+    excluded_ids = set(excluded_ids)
+    found = {row["id"] for row in rows if row["id"] in excluded_ids}
+    missing = excluded_ids - found
+    if missing:
+        raise ValueError("PV-bron-ID's niet gevonden: {}".format(
+            ", ".join(str(value) for value in sorted(missing))))
+    return ([row for row in rows if row["id"] not in excluded_ids],
+            [row for row in rows if row["id"] in excluded_ids])
+
+
 def _event_id(table, legacy_id):
     return str(uuid5(NAMESPACE_URL, "nuts-v2/legacy/{}/{}".format(table, legacy_id)))
 
@@ -293,6 +305,9 @@ def main() -> int:
     )
     parser.add_argument("--pv-unit", choices=("kWh", "MWh"),
                         help="bevestigde eenheid van oude eDag en eMaand")
+    parser.add_argument("--skip-pv-id", action="append", type=int, default=[],
+                        help="sluit een aantoonbaar fout gedateerde oude PV-rij "
+                             "uit van dag- en maandtotalen; herhaal per ID")
     args = parser.parse_args()
     if args.apply and not args.pv_unit:
         parser.error("Bevestig de oude PV-eenheid met --pv-unit vóór --apply")
@@ -320,7 +335,11 @@ def main() -> int:
     try:
         cursor = source.cursor()
         cursor.execute("SET time_zone = '+00:00'")
-        pv_rows = read_rows(cursor, OLD_PV)
+        pv_rows, skipped_pv = exclude_pv_rows(
+            read_rows(cursor, OLD_PV), args.skip_pv_id)
+        for row in skipped_pv:
+            print("PV-bronrij id {} ({}) buiten dag- en maandtotalen gelaten; "
+                  "oude tabel ongewijzigd".format(row["id"], row["datum"]))
         pv_factor = Decimal("1000") if args.pv_unit == "MWh" else Decimal("1")
         old_energy_months = read_rows(cursor, OLD_ENERGY.format(table="maanden"))
         old_energy_days = read_rows(cursor, OLD_ENERGY.format(table="dagen"))

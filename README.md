@@ -269,7 +269,7 @@ leest de oude tabellen en schrijft niets:
 ```sh
 cd /home/utility-logging
 docker compose build p1-sync
-docker compose run --rm --no-deps p1-sync python -m nuts.import_legacy --pv-unit kWh
+docker compose run --rm --no-deps p1-sync python -m nuts.import_legacy --pv-unit kWh --skip-pv-id 1717 --skip-pv-id 1718
 ```
 
 Controleer de gemelde aantallen, datums, dubbelen en waarschuwingen. De
@@ -279,9 +279,13 @@ uitvoermodus vereist daarom expliciet `--pv-unit kWh` of `--pv-unit MWh`
 naast `--apply`. Gebruik die modus pas na een verse backup en een
 geslaagde proef op de brongegevens. De importer verwerkt ruwe rijen in
 kleine transacties en kan na onderbreking opnieuw worden gestart.
-Dubbele PV-dagen en dalende maandstanden verschijnen als waarschuwing.
-De importer kiest voor een dubbele dag geen waarde en verplaatst vermoedelijk
-fout gedateerde bronrijen niet automatisch. Bij een dalende maandstand
+De oude PV-rijen 1717 en 1718 hebben datums uit 2024 maar tellerstanden
+uit 2025. Hun juiste dagen zijn niet bewezen. De twee expliciete
+`--skip-pv-id` opties houden ze buiten de aggregatie, zodat de geldige
+2024-dagen behouden blijven. De oude tabel blijft ongewijzigd; gebruik
+dezelfde opties later ook bij `--apply`.
+Andere dubbele PV-dagen en dalende maandstanden verschijnen als waarschuwing.
+De importer kiest voor een onopgeloste dubbele dag geen waarde. Bij een dalende maandstand
 wordt de hoogste bruikbare stand als schatting vastgelegd. Na een backup kan
 `--apply` ook met deze waarschuwingen draaien: onbekende waarden blijven
 leeg en de overige maandhistorie blijft beschikbaar.
