@@ -84,38 +84,48 @@ def _one_row_per_period(
 
 
 def _pv_by_period(rows, grain, warnings):
-    if grain == "day":
-        indexed = {}
-        duplicates = {}
-        for row in rows:
-            period = period_key(row["datum"], "day")
-            if period in indexed:
-                duplicates.setdefault(period, [indexed[period]]).append(row)
-            indexed[period] = row
-        for period, candidates in sorted(duplicates.items()):
-            warnings.append(
-                "{}: {} oude PV-dagregels (ids {}); laatste regel id {} "
-                "voorlopig gebruikt, controle vereist".format(
-                    period, len(candidates),
-                    ", ".join(str(row.get("id")) for row in candidates),
-                    indexed[period].get("id")))
-        return indexed
-    indexed = {}
-    last_value = {}
-    reported = set()
+    by_day = {}  # type: Dict[date, List[Mapping[str, object]]]
     for row in rows:
         day = as_date(row["datum"])
-        period = day.replace(day=1)
-        value = _decimal(row["eMaand"])
-        if period in last_value and value < last_value[period][0] and period not in reported:
-            previous_value, previous_id = last_value[period]
+        by_day.setdefault(day, []).append(row)
+    indexed = {}
+    ambiguous_months = set()
+    month_max = {}
+    for day, candidates in sorted(by_day.items()):
+        if len(candidates) > 1 and grain == "day":
             warnings.append(
-                "{}: PV-maandstand daalt van {} (id {}) naar {} (id {}); "
-                "laatste maandstand voorlopig gebruikt, controle vereist".format(
-                    period, previous_value, previous_id, value, row.get("id")))
-            reported.add(period)
-        last_value[period] = (value, row.get("id"))
-        indexed[period] = row
+                "{}: {} oude PV-dagregels ({}); dagopbrengst onbekend, "
+                "controleer brondatums".format(
+                    day, len(candidates), "; ".join(
+                        "id {}: eDag={}, eMaand={}, eTotal={}".format(
+                            row.get("id"), row.get("eDag"), row.get("eMaand"),
+                            row.get("eTotal", "?")) for row in candidates)))
+        if grain == "day":
+            indexed[day] = candidates[0] if len(candidates) == 1 else None
+        else:
+            # eMaand is an intermittently noisy cloud snapshot. Only the
+            # latest dated snapshot estimates a month's total. A duplicate
+            # on that final date makes the month itself ambiguous.
+            month = day.replace(day=1)
+            indexed[month] = candidates[0] if len(candidates) == 1 else None
+            if len(candidates) > 1:
+                ambiguous_months.add(month)
+            else:
+                ambiguous_months.discard(month)
+                value = _decimal(candidates[0]["eMaand"])
+                month_max[month] = max(value, month_max.get(month, value))
+    for month in sorted(ambiguous_months):
+        warnings.append(
+            "{}: laatste PV-maandstand heeft dubbele bronregels; "
+            "maandopbrengst onbekend".format(month))
+    if grain == "month":
+        for month, row in indexed.items():
+            if row is not None and _decimal(row["eMaand"]) < month_max[month]:
+                indexed[month] = None
+                warnings.append(
+                    "{}: laatste PV-maandstand {} is lager dan eerdere stand {}; "
+                    "maandopbrengst onbekend".format(
+                        month, row["eMaand"], month_max[month]))
     return indexed
 
 
@@ -183,17 +193,20 @@ def build_legacy_usage(
                 bucket["water_quality"] = "unknown"
                 warnings.append("{}: negatieve oude waterwaarde".format(period))
 
-        old_pv = pv.get(period)
-        if old_pv is not None:
-            field = "eDag" if grain == "day" else "eMaand"
-            value = _decimal(old_pv[field]) * pv_factor
+        if period in pv:
+            old_pv = pv[period]
             bucket["pv_source"] = "legacy_import"
-            if value >= 0:
-                bucket["pv_generated_kwh"] = value
-                bucket["pv_quality"] = "estimated"
-            else:
+            if old_pv is None:
                 bucket["pv_quality"] = "unknown"
-                warnings.append("{}: negatieve oude PV-waarde".format(period))
+            else:
+                field = "eDag" if grain == "day" else "eMaand"
+                value = _decimal(old_pv[field]) * pv_factor
+                if value >= 0:
+                    bucket["pv_generated_kwh"] = value
+                    bucket["pv_quality"] = "estimated"
+                else:
+                    bucket["pv_quality"] = "unknown"
+                    warnings.append("{}: negatieve oude PV-waarde".format(period))
 
         result.append(bucket)
 

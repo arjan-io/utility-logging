@@ -242,8 +242,12 @@ oude waterberekening. Bij gaten blijft het oude totaal hoogstens als
 `estimated` beschikbaar; zonder oud totaal blijft de periode onbekend.
 De import gebruikt vaste
 event-ID's per oude bronrij, zodat een herhaling geen dubbele ruwe
-metingen maakt. De oude PV-dagwaarde `eDag` en de laatst opgeslagen
-maandstand `eMaand` krijgen de kwaliteit `estimated`.
+metingen maakt. De oude PV-dagwaarde `eDag` en de laatst gedateerde
+maandstand `eMaand` krijgen de kwaliteit `estimated`. Een tussentijdse
+daling van `eMaand` telt niet als fout wanneer de eindstand weer klopt.
+Bij dubbele PV-dagregels blijft de dagwaarde `unknown`; bij een laatste
+maandstand lager dan een eerdere betrouwbare stand blijft ook de maand
+`unknown`. Negatieve oude waterperioden worden eveneens `unknown`.
 Oude `TIMESTAMP`-waarden worden in een UTC-databasesessie gelezen en
 daarna naar de Amsterdamse kalenderdatum omgerekend. Daardoor valt
 bijvoorbeeld 30 september 22:00 UTC terecht in de maand oktober.
@@ -267,10 +271,11 @@ uitvoermodus vereist daarom expliciet `--pv-unit kWh` of `--pv-unit MWh`
 naast `--apply`. Gebruik die modus pas na een verse backup en een
 geslaagde proef op de brongegevens. De importer verwerkt ruwe rijen in
 kleine transacties en kan na onderbreking opnieuw worden gestart.
-Een dalende oude PV-maandstand of dubbele PV-dag verschijnt als
-waarschuwing met de betrokken bron-ID's. De proef gaat verder en toont
-voorlopig de laatste regel; `--apply` stopt zolang zulke waarschuwingen
-nog niet zijn beoordeeld.
+Dubbele PV-dagen en onlogische maandstanden verschijnen als waarschuwing.
+De importer kiest voor zulke perioden geen waarde en verplaatst vermoedelijk
+fout gedateerde bronrijen niet automatisch. Na een backup kan `--apply`
+ook met deze waarschuwingen draaien: onbekende waarden blijven leeg en de
+overige maandhistorie blijft beschikbaar.
 
 ## Dagberekening zonder schrijven controleren
 

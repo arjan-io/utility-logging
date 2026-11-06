@@ -370,8 +370,11 @@ def main() -> int:
             print("Controlemodus: niets geschreven. Gebruik --apply pas na backup.")
             return 0
         if warnings:
-            print("Import afgebroken: controleer waarschuwingen vóór --apply.")
-            return 2
+            print(
+                "{} bronafwijkingen gemeld. Ongeldige of dubbele periodewaarden "
+                "blijven NULL met kwaliteit unknown; overige maandstanden zijn "
+                "schattingen.".format(len(warnings))
+            )
 
         destination = mysql.connector.connect(**target_config)
         dest_cursor = destination.cursor()
