@@ -6,6 +6,12 @@ de uitvoerbare diensten, hun containerconfiguratie en dit installatieblad.
 SQL voor het aanmaken van de MariaDB-tabellen en de eenmalige migratie wordt
 apart aangeleverd en door de beheerder zelf uitgevoerd.
 
+Alle ruwe meettijdstippen worden in UTC opgeslagen; de website kan die
+naar de gewenste tijdzone omzetten. `usage_date` en `usage_month` zijn
+kalenderlabels voor de Nederlandse dag of maand, geen tijdstippen. Hun
+grenzen worden uit UTC-metingen in `Europe/Amsterdam` berekend, zodat
+zomer- en wintertijd de dagtotalen niet een uur verschuiven.
+
 ## Wat draait er?
 
 | Dienst | Taak |
@@ -261,6 +267,9 @@ uitvoermodus vereist daarom expliciet `--pv-unit kWh` of `--pv-unit MWh`
 naast `--apply`. Gebruik die modus pas na een verse backup en een
 geslaagde proef op de brongegevens. De importer verwerkt ruwe rijen in
 kleine transacties en kan na onderbreking opnieuw worden gestart.
+Een dalende oude PV-maandstand verschijnt als waarschuwing met de betrokken
+bron-ID's. De proef gaat verder; `--apply` stopt zolang zulke waarschuwingen
+nog niet zijn beoordeeld.
 
 ## Dagberekening zonder schrijven controleren
 

@@ -83,18 +83,24 @@ def _one_row_per_period(
     return indexed
 
 
-def _pv_by_period(rows, grain):
+def _pv_by_period(rows, grain, warnings):
     if grain == "day":
         return _one_row_per_period(rows, grain, "PV")
     indexed = {}
     last_value = {}
+    reported = set()
     for row in rows:
         day = as_date(row["datum"])
         period = day.replace(day=1)
         value = _decimal(row["eMaand"])
-        if period in last_value and value < last_value[period]:
-            raise ValueError("PV-maandstand daalt binnen {}".format(period))
-        last_value[period] = value
+        if period in last_value and value < last_value[period][0] and period not in reported:
+            previous_value, previous_id = last_value[period]
+            warnings.append(
+                "{}: PV-maandstand daalt van {} (id {}) naar {} (id {}); "
+                "laatste maandstand voorlopig gebruikt, controle vereist".format(
+                    period, previous_value, previous_id, value, row.get("id")))
+            reported.add(period)
+        last_value[period] = (value, row.get("id"))
         indexed[period] = row
     return indexed
 
@@ -114,8 +120,8 @@ def build_legacy_usage(
 
     electricity = _one_row_per_period(electricity_rows, grain, "elek/gas")
     water = _one_row_per_period(water_rows, grain, "water")
-    pv = _pv_by_period(pv_rows, grain)
     warnings = []  # type: List[str]
+    pv = _pv_by_period(pv_rows, grain, warnings)
     result = []  # type: List[Dict[str, object]]
 
     for period in sorted(set(electricity) | set(water) | set(pv)):
