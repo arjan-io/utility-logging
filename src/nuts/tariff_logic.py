@@ -402,6 +402,7 @@ def activate_rule(connection, rule_id):
         WHERE tariff_source_id=%s AND component=%s AND status='active'
         FOR UPDATE
     """, (rule["tariff_source_id"], rule["component"]))
+    replaced = None
     for other in equivalents:
         same_slot = all(other[key] == rule[key] for key in (
             "flow", "band_quantity", "band_from", "band_until"))
@@ -410,16 +411,26 @@ def activate_rule(connection, rule_id):
                                                 rule["register_code"]))
         if rule["component"] == "feedin_cost":
             same_slot = same_slot and other["basis"] == rule["basis"]
-        if same_slot and other["code"] != rule["code"] and overlaps(
+        if not same_slot or other["code"] == rule["code"] or not overlaps(
                 other["valid_from"], other["valid_until"],
                 rule["valid_from"], rule["valid_until"]):
+            continue
+        if other["register_code"] != rule["register_code"]:
             raise InputError("Er is al een actieve regel voor dit onderdeel en telwerk")
+        if other["valid_from"] < rule["valid_from"]:
+            execute(connection, "UPDATE tariff_rule SET valid_until=%s WHERE id=%s",
+                    (rule["valid_from"], other["id"]))
+        elif other["valid_from"] == rule["valid_from"]:
+            execute(connection, "UPDATE tariff_rule SET status='superseded' WHERE id=%s",
+                    (other["id"],))
+            replaced = other["id"]
+        else:
+            raise InputError("Een latere actieve regel voor dit onderdeel bestaat al")
     existing = rows(connection, """
         SELECT id, valid_from, valid_until FROM tariff_rule
         WHERE tariff_source_id=%s AND code=%s AND status='active'
         ORDER BY valid_from FOR UPDATE
     """, (rule["tariff_source_id"], rule["code"]))
-    replaced = None
     for old in existing:
         if not overlaps(old["valid_from"], old["valid_until"],
                         rule["valid_from"], rule["valid_until"]):
