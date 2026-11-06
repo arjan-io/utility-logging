@@ -147,7 +147,7 @@ def _upsert(connection, table, key, values):
         cursor.close()
 
 
-def recalculate_day(connection, day):
+def day_inputs(connection, day):
     start, end = day_start_utc(day), day_start_utc(day + timedelta(days=1))
     margin = timedelta(minutes=20)
     window = (sql_time(start - margin), sql_time(end + margin))
@@ -167,7 +167,16 @@ def recalculate_day(connection, day):
         WHERE measured_at_utc >= %s AND measured_at_utc <= %s
         ORDER BY measured_at_utc
     """, window)
-    proposed = build_daily(day, p1, water, pv)
+    return p1, water, pv
+
+
+def calculate_day(connection, day):
+    """Calculate one local day using SELECT queries only."""
+    return build_daily(day, *day_inputs(connection, day))
+
+
+def recalculate_day(connection, day):
+    proposed = calculate_day(connection, day)
     existing = one(connection, "SELECT * FROM daily_usage WHERE usage_date=%s", (day,))
     _upsert(connection, "daily_usage", "usage_date", _merge_existing(proposed, existing))
 

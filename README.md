@@ -259,6 +259,26 @@ naast `--apply`. Gebruik die modus pas na een verse backup en een
 geslaagde proef op de brongegevens. De importer verwerkt ruwe rijen in
 kleine transacties en kan na onderbreking opnieuw worden gestart.
 
+## Dagberekening zonder schrijven controleren
+
+De dagcontrole gebruikt alleen `SELECT` op `nuts_v2`. Ze toont per bron
+het aantal rijen rond de daggrenzen, de eerste en laatste UTC-meettijd,
+het berekende verbruik en de kwaliteitsstatus. Er worden geen dag- of
+maandregels opgeslagen:
+
+```sh
+cd /home/utility-logging
+docker compose build aggregate
+docker compose --profile aggregate run --rm --no-deps aggregate \
+  python -m nuts.aggregate_probe 2026-11-05
+```
+
+Gebruik een afgesloten lokale kalenderdag. De eerste PV-dag kan `unknown`
+zijn wanneer de cloudcollector pas midden op de dag begon; dat is geen
+nulopbrengst. Voor een complete PV-dag zijn meetpunten rond beide
+middernachtgrenzen nodig. Start de doorlopende `aggregate`-dienst pas
+nadat de berekening en de historische gegevens zijn vergeleken.
+
 ## Huidige testgrens
 
 De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
