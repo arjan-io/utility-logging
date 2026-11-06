@@ -328,7 +328,10 @@ def save_rule(connection, form, actor):
     if component in ("fixed_supply", "tax_credit", "network") and rule["flow"] != "none":
         raise InputError("Een vast bedrag heeft geen afname- of terugleverrichting")
     if component in ("supply", "energy_tax") and rule["flow"] != "import":
-        raise InputError("Levering en energiebelasting horen bij afname")
+        raise InputError(
+            "Onderdeel staat op Variabele levering of Energiebelasting. "
+            "Gebruik voor teruglevering het korte formulier "
+            "'Teruglevering boven verbruik' bij stap 4")
     if component == "export_compensation" and rule["flow"] != "export":
         raise InputError("Terugleververgoeding hoort bij teruglevering")
     if component == "feedin_cost" and rule["flow"] != "export":

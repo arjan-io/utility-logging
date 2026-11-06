@@ -54,6 +54,29 @@ def database():
     )
 
 
+def export_excess_form(form):
+    """Use fixed semantics for compensation above use during saldering."""
+    if not form.get("valid_until", "").strip():
+        raise logic.InputError("Vul de eerste dag na dit tarief in")
+    return {
+        "source_id": form.get("source_id", ""),
+        "code": "teruglevering_boven_verbruik",
+        "component": "export_compensation",
+        "flow": "export",
+        "register_code": "all",
+        "basis": "per_kwh",
+        "amount_eur": form.get("amount_eur", ""),
+        "includes_vat": "0",
+        "vat_rate": "0",
+        "valid_from": form.get("valid_from", ""),
+        "valid_until": form.get("valid_until", ""),
+        "band_quantity": "",
+        "band_from": "",
+        "band_until": "",
+        "notes": "Vergoeding voor netto overschot na salderen",
+    }
+
+
 def page(connection, message=""):
     contracts = logic.rows(connection, """
         SELECT id, commodity, supplier, valid_from, valid_until FROM contract
@@ -115,6 +138,10 @@ def page(connection, message=""):
             row["id"], esc(LABELS[row["commodity"]]),
             esc(LABELS[row["source_kind"]]), esc(row["source_name"]))
         for row in sources)
+    electricity_suppliers = '<option value="">Kies stroomleverancier</option>' + "".join(
+        '<option value="{}">{}</option>'.format(row["id"], esc(row["source_name"]))
+        for row in sources if row["commodity"] == "electricity" and
+        row["source_kind"] == "supplier")
     settlement_rows = "".join(
         "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
             esc(row["supplier"]), esc(row["starts_on"]),
@@ -226,6 +253,18 @@ bij activering sluit de oude regel dan vanzelf.</p>
 <p class="hint">Deze voorbeeldbedragen komen uit je aangeleverde kaart. Gebruik de datums
 en bedragen van je eigen contract. Het totaal van €0,26095/kWh is al levering plus
 energiebelasting; voer dat totaal niet nog een keer in. De voorbeeldkaart is inclusief btw.</p>
+<h3>Teruglevering boven verbruik (geen btw)</h3>
+<p class="hint">Gebruik dit korte formulier voor de vergoeding op het overschot na
+salderen. De keuzes <strong>Terugleververgoeding · Teruglevering · Beide · per kWh · 0% btw</strong>
+staan al vast. Dit bedrag wordt pas bij de afrekening op het netto overschot toegepast,
+dus niet als gewone dagopbrengst geboekt.</p>
+<form method="post" action="/export-excess">{csrf}<div class="grid">
+<div class="field"><label for="export-source">Stroomleverancier</label><select id="export-source" name="source_id" required>{electricity_suppliers}</select></div>
+<div class="field"><label for="export-amount">Vergoeding per kWh, met minteken</label><input id="export-amount" name="amount_eur" inputmode="decimal" placeholder="-0,15000" required></div>
+<div class="field"><label for="export-start">Ingangsdatum</label><input id="export-start" name="valid_from" type="date" required></div>
+<div class="field"><label for="export-end">Eerste dag waarop dit tarief niet meer geldt</label><input id="export-end" name="valid_until" type="date" required></div></div>
+<button>Terugleververgoeding als concept opslaan</button></form>
+<h3>Overige tariefregels</h3>
 <form method="post" action="/rule">{csrf}<div class="grid">
 <div class="field"><label for="rule-source">Wie brengt dit bedrag in rekening?</label><select id="rule-source" name="source_id" required>{source_options}</select></div>
 <div class="field"><label for="rule-code">Naam van deze tariefregel</label><input id="rule-code" name="code" placeholder="levering stroom normaal" required><small>Gebruik dezelfde naam bij een nieuw tarief voor dit onderdeel.</small></div>
@@ -256,6 +295,7 @@ energiebelasting; voer dat totaal niet nog een keer in. De voorbeeldkaart is inc
         electricity_contracts=electricity_contracts,
         policies=options(logic.POLICIES), settlements=settlement_rows,
         sources=source_rows, source_options=source_options,
+        electricity_suppliers=electricity_suppliers,
         components=options(logic.COMPONENTS), flows=options(logic.FLOWS),
         registers=options(logic.REGISTERS), bases=options(logic.BASES),
         bands='<option value="">Geen</option>' + options(logic.BANDS[1:]),
@@ -317,7 +357,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.require_auth():
             return
         path = urlsplit(self.path).path
-        if path not in ("/contract", "/settlement", "/source", "/rule", "/activate"):
+        if path not in ("/contract", "/settlement", "/source", "/rule",
+                        "/export-excess", "/activate"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if self.headers.get("Content-Type", "").split(";", 1)[0] != "application/x-www-form-urlencoded":
@@ -345,6 +386,10 @@ class Handler(BaseHTTPRequestHandler):
                 elif path == "/rule":
                     logic.save_rule(connection, form, os.environ["TARIFF_ADMIN_USER"])
                     message = "Concept opgeslagen. Controleer en activeer het hieronder."
+                elif path == "/export-excess":
+                    logic.save_rule(connection, export_excess_form(form),
+                                    os.environ["TARIFF_ADMIN_USER"])
+                    message = "Terugleververgoeding als concept opgeslagen. Controleer en activeer het hieronder."
                 else:
                     logic.activate_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
                     message = "Tariefregel geactiveerd; vorige regel met dezelfde naam afgesloten."

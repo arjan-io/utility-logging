@@ -286,6 +286,12 @@ eenheid en datum. Regels met een verbruiksband en de afrekening van
 saldering staan afzonderlijk; het eenvoudige overzicht telt die niet
 bij de actuele variabele afnametarieven op.
 
+Voor **Teruglevering boven verbruik (geen btw)** staat bij stap 4 een kort
+formulier. Kies de stroomleverancier, vul de vergoeding als negatief bedrag
+per kWh in en geef de geldigheidsperiode op. Onderdeel, richting en 0% btw
+worden automatisch ingevuld. Deze vergoeding voor netto overschot na
+salderen verschijnt pas in de afrekening, niet als gewone dagopbrengst.
+
 De `publisher` gebruikt actieve leverings- en belastingregels voor zijn
 huidige variabele MQTT-kosten. De aparte dagberekening schrijft vaste
 levering en netbeheer ook naar `daily_cost_line`. De databasegebruiker
