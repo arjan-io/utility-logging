@@ -22,6 +22,8 @@ zomer- en wintertijd de dagtotalen niet een uur verschuiven.
 | `water-sync` | Stuurt alleen waterevents naar MariaDB en herhaalt veilig na een storing. |
 | `aggregate` | Berekent gesloten dagen en maanden voor grafieken, met onbekende waarden bij meetgaten. |
 | `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
+| `tariffs` | Beheert contracten, afrekenperioden en tariefregels via een lokale webpagina. |
+| `costs` | Berekent geschatte dagkosten per onderdeel uit dagverbruik en actieve tarieven. |
 | `pv-probe` | Leest eenmalig een GoodWe SEMS+-station zonder data op te slaan. |
 | `pv` | Vraagt SEMS+ periodiek uit en bewaart de cumulatieve opbrengst in een eigen SQLite-buffer. |
 | `pv-sync` | Stuurt PV-metingen onafhankelijk naar MariaDB en herhaalt na NAS-uitval. |
@@ -32,10 +34,11 @@ alleen-lezen proefmodus.
 
 De oude MQTT-velden blijven beschikbaar. Met `MQTT_PREFIX=sensors/v2`
 verschijnen ze eerst onder proefonderwerpen. Pas bij de definitieve
-omschakeling wordt de prefix `sensors` gebruikt. De kosten zijn momenteel
-**variabele afnamekosten**. Vaste leveringskosten, netbeheer, saldering en
-teruglevering vragen nog een afzonderlijke afrekenberekening; deze versie
-claimt daarvoor geen factuurbedrag.
+omschakeling wordt de prefix `sensors` gebruikt. De MQTT-kosten zijn
+**variabele afnamekosten**. De aparte dienst `costs` berekent dagregels
+voor vaste levering, belastingvermindering en netbeheer. Saldering en
+afrekening van verbruiksbanden vragen nog een afzonderlijke berekening;
+deze versie claimt daarvoor geen factuurbedrag.
 
 ## Voorbereiden op de Pi
 
@@ -230,6 +233,88 @@ Met `GOODWE_POLL_SECONDS=60` begint een nieuwe opvraag ongeveer iedere
 minuut. Duurt een cloudopvraag langer dan een minuut, dan begint de
 volgende meteen na afloop. Het interval beschrijft de opvragen; de cloud
 kan dezelfde meetwaarde meermaals teruggeven.
+
+## Tarieven invoeren
+
+De pagina gebruikt de bestaande tabellen `contract`, `settlement_period`,
+`tariff_source` en `tariff_rule` in `nuts_v2`. Stroom, gas en water hebben
+ieder een eigen contractlijn. Een nieuw contract sluit het vorige contract
+voor dezelfde nutssoort op zijn ingangsdatum. Een tariefregel met dezelfde
+herkenningsnaam en bron sluit bij activering de vorige regel op zijn
+ingangsdatum. De einddatum is steeds exclusief. Netbeheer en overheid
+hebben eigen bronnen buiten de leveringscontracten; jaarlijkse regels
+kunnen bijvoorbeeld op 1 januari ingaan.
+Dezelfde tabellen kunnen later door een nieuwe Node-website worden gelezen;
+deze beheerpagina is een tijdelijke, zelfstandige invoerroute voor de
+migratie.
+
+Zet `TARIFF_ADMIN_USER` en een eigen sterk `TARIFF_ADMIN_PASSWORD` in
+de lokale `.env`. Start vervolgens de aparte dienst:
+
+```sh
+cd /home/utility-logging
+docker compose --profile tariffs build tariffs
+docker compose --profile tariffs up -d tariffs
+```
+
+De poort is op de Pi alleen aan `127.0.0.1` gekoppeld. Open vanaf een
+andere computer een SSH-tunnel met het eigen Pi-adres of de hostname:
+
+```sh
+ssh -L 8765:127.0.0.1:8765 pi@utilityPi.localdomain
+```
+
+Open daarna `http://127.0.0.1:8765/` in de browser en meld je aan met
+de ingevoerde beheernaam en het wachtwoord. De pagina kan draaien terwijl
+de oude P1- en waterlezers actief blijven; ze gebruikt geen GPIO of
+seriële poort.
+
+Voer bedragen in met hun **oorspronkelijke eenheid**. Een leverancier kan
+€5,99 per maand vragen, een netbeheerder €266,63 per jaar en de
+belastingvermindering kan als negatief jaarbedrag zijn opgegeven. De
+pagina toont ter controle het dagbedrag voor de huidige kalenderdag;
+de opslag blijft per maand of jaar. Btw wordt alleen toegevoegd wanneer
+een ingevoerd bedrag exclusief btw is.
+
+De groene tariefkaart dient als invoercontrole: stroom normaal bestaat
+uit €0,15010 levering plus €0,11085 belasting = €0,26095/kWh;
+stroom dal uit €0,14768 plus €0,11085 = €0,25853/kWh; gas uit
+€0,71510 plus €0,72680 = €1,44190/m³. Voer die totaaltarieven niet
+nogmaals als aparte regel in. Maak eerst een contract of bron, dan de
+tariefregels als concept. Activeer pas na controle van bedrag, btw,
+eenheid en datum. Regels met een verbruiksband en de afrekening van
+saldering staan afzonderlijk; het eenvoudige overzicht telt die niet
+bij de actuele variabele afnametarieven op.
+
+De `publisher` gebruikt actieve leverings- en belastingregels voor zijn
+huidige variabele MQTT-kosten. De aparte dagberekening schrijft vaste
+levering en netbeheer ook naar `daily_cost_line`. De databasegebruiker
+heeft hiervoor naast zijn bestaande rechten `DELETE` op alleen
+`daily_cost_line` nodig: de dienst vervangt oude schattingen na een
+tariefwijziging. Start de berekening nadat `aggregate` loopt en de
+tarieven zijn ingevoerd:
+
+```sh
+docker compose --profile costs up -d costs
+```
+
+Een controle van één lokale dag schrijft niets:
+
+```sh
+docker compose run --rm --no-deps costs python -m nuts.costs --check-day 2026-11-05
+```
+
+De dienst herberekent standaard de laatste 35 gesloten Nederlandse
+kalenderdagen. De kostenregels onderscheiden variabele levering, energiebelasting, vaste
+levering, belastingvermindering en netbeheer. Een overzicht van kosten
+zonder netbeheer kan daardoor dat onderdeel eenvoudig weglaten. Bedragen
+per maand of jaar worden per echte kalenderdag verdeeld; vaste kosten
+blijven bestaan als de meter die dag niets registreert. Ontbrekend
+verbruik levert geen verzonnen variabele kosten op. Saldering en
+verbruiksafhankelijke terugleverkosten blijven schattingen tot de
+afrekening; regels met een onbekende afrekenband worden niet als nul
+geboekt. De oude `nota.php`-functie kan later worden opgebouwd uit
+maandverbruik en maandkosten.
 
 ## Historische import voorbereiden
 

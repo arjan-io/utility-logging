@@ -52,6 +52,18 @@ services:
     profiles: ["aggregate"]
     command: ["python", "-m", "nuts.aggregate"]
 
+  tariffs:
+    <<: *common
+    profiles: ["tariffs"]
+    command: ["python", "-m", "nuts.tariff_admin"]
+    ports:
+      - "127.0.0.1:${TARIFF_WEB_PORT:-8765}:8765"
+
+  costs:
+    <<: *common
+    profiles: ["costs"]
+    command: ["python", "-m", "nuts.costs"]
+
   pv-probe:
     build:
       context: .
