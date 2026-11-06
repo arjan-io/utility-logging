@@ -238,6 +238,9 @@ De import gebruikt vaste
 event-ID's per oude bronrij, zodat een herhaling geen dubbele ruwe
 metingen maakt. De oude PV-dagwaarde `eDag` en de laatst opgeslagen
 maandstand `eMaand` krijgen de kwaliteit `estimated`.
+Oude `TIMESTAMP`-waarden worden in een UTC-databasesessie gelezen en
+daarna naar de Amsterdamse kalenderdatum omgerekend. Daardoor valt
+bijvoorbeeld 30 september 22:00 UTC terecht in de maand oktober.
 
 Voor de controle heeft de container leesrechten op de oude databases
 nodig. Zet zo nodig een bestaand alleen-lezen account in

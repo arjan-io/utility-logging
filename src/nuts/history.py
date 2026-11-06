@@ -4,9 +4,13 @@ Deze module heeft geen database-afhankelijkheid. De live importer leest de
 oude tabellen en schrijft de geretourneerde buckets naar het nieuwe schema.
 """
 
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Dict, Iterable, List, Mapping, Tuple
+from zoneinfo import ZoneInfo
+
+
+LOCAL = ZoneInfo("Europe/Amsterdam")
 
 
 METRICS = (
@@ -23,11 +27,15 @@ COMMODITIES = ("electricity", "gas", "water", "pv")
 
 def as_date(value: object) -> date:
     if isinstance(value, datetime):
-        return value.date()
+        # The importer requests TIMESTAMP columns in UTC. DATETIME values in
+        # the old period tables are also interpreted as UTC clock times.
+        utc = value if value.tzinfo is not None else value.replace(tzinfo=timezone.utc)
+        return utc.astimezone(LOCAL).date()
     if isinstance(value, date):
         return value
     if isinstance(value, str):
-        return date.fromisoformat(value[:10])
+        value = value.strip()
+        return as_date(datetime.fromisoformat(value)) if len(value) > 10 else date.fromisoformat(value)
     raise ValueError("Onbekend datumtype: {!r}".format(value))
 
 
@@ -37,7 +45,7 @@ def period_key(value: object, grain: str) -> date:
         if day.day != 1:
             raise ValueError(
                 "Maandrecord heeft geen datum op de eerste dag: {}. "
-                "Controleer de tijdzone van de MySQL-sessie.".format(day)
+                "Controleer de brondatum en tijdzone.".format(day)
             )
         return day
     if grain == "day":
