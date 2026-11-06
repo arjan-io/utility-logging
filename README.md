@@ -233,6 +233,15 @@ kan dezelfde meetwaarde meermaals teruggeven.
 
 ## Historische import voorbereiden
 
+De oude website toont ongeveer 31 kalenderdagen uit dagtotalen, circa
+13 maanden uit maandtotalen en meerjarige vergelijkingen uit maandtotalen.
+Daarom bewaart `daily_usage` de beschikbare oude dagen en
+`monthly_usage` de oude maanden als zelfstandige historische waarden.
+Jaarcijfers worden uit `monthly_usage` opgeteld; er is geen aparte
+jaartabel nodig. Voor nieuwe data blijven de afzonderlijke P1-metingen,
+waterpulsen inclusief nulmetingen en PV-metingen in de ruwe tabellen
+beschikbaar. De huidige containers verwijderen die ruwe rijen niet.
+
 De importer leest oude P1- en watermetingen, de bestaande dag- en
 maandtotalen en `nuts-pv.opbrengst`. Oude maanden blijven maandregels;
 ontbrekende dagen worden niet uit een maandbedrag afgeleid. Ruwe
