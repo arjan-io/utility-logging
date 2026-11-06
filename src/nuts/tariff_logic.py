@@ -115,6 +115,8 @@ def rule_form(form):
     quoted = amount(pick(form, "amount_eur"), "Bedrag")
     includes_vat = choose(pick(form, "includes_vat"), ("0", "1"), "btw") == "1"
     vat_rate = amount(pick(form, "vat_rate") or "0", "Btw-tarief")
+    if vat_rate > 1 and vat_rate <= 100:
+        vat_rate /= 100
     if vat_rate < 0 or vat_rate > 1:
         raise InputError("Btw-tarief moet tussen 0 en 1 liggen")
     if vat_rate.as_tuple().exponent < -4:

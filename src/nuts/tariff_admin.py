@@ -75,7 +75,8 @@ def page(connection, message=""):
         SELECT r.id, r.code, r.component, r.flow, r.register_code,
                r.basis, r.amount_eur, r.includes_vat, r.vat_rate,
                r.valid_from, r.valid_until, r.status, r.band_quantity,
-               r.band_from, r.band_until, s.commodity, s.source_name
+               r.band_from, r.band_until, s.commodity, s.source_kind,
+               s.source_name
         FROM tariff_rule r JOIN tariff_source s ON s.id=r.tariff_source_id
         ORDER BY r.valid_from DESC, r.id DESC LIMIT 200
     """)
@@ -127,6 +128,9 @@ def page(connection, message=""):
     for row in rules:
         daily = logic.daily_equivalent(row["amount_eur"], row["basis"], today)
         daily_text = "" if daily is None else " (≈ €{:.5f}/dag)".format(daily)
+        vat_text = ("incl. btw" if row["includes_vat"] else
+                    "excl. btw; {}%".format(
+                        format((row["vat_rate"] * 100).normalize(), "f")))
         band = ""
         if row["band_quantity"]:
             band = " · {} vanaf {}{}".format(
@@ -138,11 +142,14 @@ def page(connection, message=""):
                       '<input type="hidden" name="id" value="{}">'
                       '<button>Activeren</button></form>').format(csrf_field(), row["id"])
         rule_rows.append(
-            "<tr><td>{} · {}</td><td>{}<small>{}{}</small></td>"
-            "<td>€{} {}{}</td><td>{} – {}</td><td>{}</td><td>{}</td></tr>".format(
-                esc(LABELS[row["commodity"]]), esc(row["source_name"]),
-                esc(LABELS[row["component"]]), esc(row["code"]), band,
+            "<tr><td>{} · {} · {}</td><td>{}<small>{} · {} · {}{}</small></td>"
+            "<td>€{} {}{}<small>{}</small></td><td>{} – {}</td><td>{}</td><td>{}</td></tr>".format(
+                esc(LABELS[row["commodity"]]), esc(LABELS[row["source_kind"]]),
+                esc(row["source_name"]), esc(LABELS[row["component"]]),
+                esc(row["code"]), esc(LABELS[row["flow"]]),
+                esc(LABELS[row["register_code"]]), band,
                 esc(row["amount_eur"]), esc(LABELS[row["basis"]]), daily_text,
+                esc(vat_text),
                 esc(row["valid_from"]), esc(row["valid_until"] or "volgende invoer"),
                 esc(row["status"]), action))
     return """<!doctype html><html lang="nl"><meta charset="utf-8">
@@ -150,11 +157,17 @@ def page(connection, message=""):
 <title>Tarievenbeheer</title><style>
 body{{font:16px system-ui,sans-serif;max-width:1100px;margin:2rem auto;padding:0 1rem;color:#183242}}
 h1,h2{{color:#125265}}section{{border:1px solid #c6d5dd;border-radius:12px;padding:1rem;margin:1rem 0}}
-label{{display:block;margin:.7rem 0}}input,select{{display:block;width:100%;max-width:35rem;padding:.55rem;box-sizing:border-box}}
+form{{position:relative;isolation:isolate}}.field{{min-width:0;margin:.7rem 0}}
+label{{display:block;margin-bottom:.35rem;font-weight:600}}
+input,select{{display:block;width:100%;min-height:2.8rem;padding:.55rem;box-sizing:border-box;
+ position:relative;z-index:1;pointer-events:auto;font:inherit;background:#fff;color:#183242;
+ border:1px solid #8296a0;border-radius:6px}}
+input:focus,select:focus{{outline:3px solid #7bc9c4;outline-offset:2px}}
 button{{background:#08736f;color:white;border:0;border-radius:6px;padding:.6rem 1rem;cursor:pointer}}
 table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1e5;padding:.6rem;text-align:left;vertical-align:top}}
 .scroll{{overflow-x:auto}}small{{display:block;color:#586c78}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
 .hint{{color:#425863}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1rem}}
+.example{{background:#f0f6f7;border-left:4px solid #08736f;padding:.7rem 1rem;margin:.7rem 0}}
 </style><main><h1>Tarievenbeheer</h1>
 <p class="hint">Stroom, gas en water hebben elk hun eigen contractlijn. Netbeheer en overheid zijn
 aparte bronnen. Bedragen blijven in de opgegeven eenheid bewaard.</p>{message}
@@ -163,49 +176,77 @@ aparte bronnen. Bedragen blijven in de opgegeven eenheid bewaard.</p>{message}
 alleen voor deze kalenderdag omgerekend. Netbeheer staat apart. Regels met een verbruiksband
 of jaarafrekening staan niet in deze eenvoudige optelling ({conditional} zulke regels).</p>
 <div class="scroll"><table><tr><th>Soort</th><th>Variabel</th><th>Vaste levering</th><th>Belastingkorting</th><th>Netbeheer</th></tr>{summary}</table></div></section>
-<section><h2>1. Contract van leverancier</h2><form method="post" action="/contract">{csrf}
-<div class="grid"><label>Nutssoort<select name="commodity">{commodities}</select></label>
-<label>Leverancier<input name="supplier" maxlength="120" required></label>
-<label>Ingangsdatum<input name="valid_from" type="date" required></label>
-<label>Omschrijving<input name="description" maxlength="200"></label></div>
+<section><h2>1. Leveringscontract</h2>
+<p class="hint">Maak één contract voor stroom, één voor gas en eventueel één voor water.
+Ook wanneer stroom en gas dezelfde leverancier hebben, zijn dit twee contractregels.
+De leverancier verschijnt daarna vanzelf als tariefbron bij stap 4.</p>
+<p class="example">Voorbeeld: kies <strong>Stroom</strong>, vul je leverancier en de ingangsdatum
+van het stroomcontract in. Herhaal dit apart voor gas.</p>
+<form method="post" action="/contract">{csrf}<div class="grid">
+<div class="field"><label for="contract-commodity">Nutssoort</label><select id="contract-commodity" name="commodity">{commodities}</select></div>
+<div class="field"><label for="contract-supplier">Leverancier</label><input id="contract-supplier" name="supplier" maxlength="120" required></div>
+<div class="field"><label for="contract-start">Ingangsdatum contract</label><input id="contract-start" name="valid_from" type="date" required></div>
+<div class="field"><label for="contract-description">Omschrijving (optioneel)</label><input id="contract-description" name="description" maxlength="200"></div></div>
 <button>Contract opslaan</button></form><div class="scroll"><table><tr><th>Soort</th><th>Leverancier</th><th>Vanaf</th><th>Tot</th></tr>{contracts}</table></div></section>
-<section><h2>2. Afrekenperiode stroom</h2>
-<p class="hint">Leg per stroomcontract vast welke afrekenwijze tussen twee datums geldt.
-De einddatum telt niet mee. Een volgende periode kan op die datum beginnen.</p>
+<section><h2>2. Afrekenwijze stroom</h2>
+<p class="hint">Alleen voor stroom. Kies het contract uit stap 1 en leg vast hoe
+teruglevering in die periode wordt verrekend. Vul het begin en de eerste dag
+<em>na</em> de periode in. Een volgende periode mag op die einddatum starten.
+Dit onderdeel kun je later invullen als je eerst de gewone tarieven wilt vastleggen.</p>
 <form method="post" action="/settlement">{csrf}<div class="grid">
-<label>Stroomcontract<select name="contract_id" required>{electricity_contracts}</select></label>
-<label>Begindatum<input name="starts_on" type="date" required></label>
-<label>Einddatum<input name="ends_on" type="date" required></label>
-<label>Afrekenwijze<select name="electricity_policy">{policies}</select></label></div>
+<div class="field"><label for="settlement-contract">Stroomcontract</label><select id="settlement-contract" name="contract_id" required>{electricity_contracts}</select></div>
+<div class="field"><label for="settlement-start">Begindatum</label><input id="settlement-start" name="starts_on" type="date" required></div>
+<div class="field"><label for="settlement-end">Eerste dag na deze periode</label><input id="settlement-end" name="ends_on" type="date" required></div>
+<div class="field"><label for="settlement-policy">Afrekenwijze</label><select id="settlement-policy" name="electricity_policy">{policies}</select></div></div>
 <button>Periode opslaan</button></form><div class="scroll"><table><tr><th>Leverancier</th><th>Vanaf</th><th>Tot</th><th>Wijze</th></tr>{settlements}</table></div></section>
-<section><h2>3. Netbeheer of overheid</h2><form method="post" action="/source">{csrf}
-<div class="grid"><label>Nutssoort<select name="commodity">{commodities}</select></label>
-<label>Bron<select name="source_kind">{source_kinds}</select></label>
-<label>Naam<input name="source_name" maxlength="120" required></label></div>
+<section><h2>3. Netbeheerder of overheid</h2>
+<p class="hint">Voeg hier alleen bronnen toe die niet uit een leveringscontract komen.
+De leverancier uit stap 1 staat al klaar. Maak zo nodig een aparte bron per nutssoort.</p>
+<p class="example">Voorbeeld: <strong>Stroom · Netbeheerder · Liander</strong>.
+Voor energiebelasting: <strong>Stroom · Overheid · Energiebelasting</strong>.
+Herhaal voor gas als die tarieven anders zijn.</p>
+<form method="post" action="/source">{csrf}<div class="grid">
+<div class="field"><label for="source-commodity">Nutssoort</label><select id="source-commodity" name="commodity">{commodities}</select></div>
+<div class="field"><label for="source-kind">Wie berekent dit?</label><select id="source-kind" name="source_kind">{source_kinds}</select></div>
+<div class="field"><label for="source-name">Naam van de bron</label><input id="source-name" name="source_name" maxlength="120" required></div></div>
 <button>Bron opslaan</button></form><div class="scroll"><table><tr><th>Soort</th><th>Bron</th><th>Naam</th></tr>{sources}</table></div></section>
-<section><h2>4. Tarief als concept</h2><p class="hint">Voer een regel per onderdeel in. Voorbeeld stroom normaal:
-€0,15010 levering plus €0,11085 energiebelasting geeft €0,26095/kWh totaal.
-Vul dat totaal niet nog eens als levering in. Vaste bedragen mogen per dag,
-maand of jaar worden ingevoerd. Een nieuwe regel met dezelfde herkenningsnaam
-sluit de vorige vanaf zijn ingangsdatum.</p>
+<section><h2>4. Bedragen uit je tariefkaart</h2>
+<p class="hint">Maak voor <strong>ieder bedrag</strong> een eigen tariefregel. Kies eerst wie het
+bedrag rekent: leverancier uit stap 1, netbeheerder of overheid uit stap 3.
+Gebruik bij een nieuw bedrag volgend jaar dezelfde naam en de nieuwe ingangsdatum;
+bij activering sluit de oude regel dan vanzelf.</p>
+<div class="scroll"><table><tr><th>Wat staat op de tariefkaart?</th><th>Bron en onderdeel</th><th>Richting · telwerk · eenheid</th><th>Bedrag</th></tr>
+<tr><td>Stroom levering normaal</td><td>Stroomleverancier · Variabele levering</td><td>Afname · Normaal · per kWh</td><td>€0,15010</td></tr>
+<tr><td>Stroom levering dal</td><td>Stroomleverancier · Variabele levering</td><td>Afname · Dal · per kWh</td><td>€0,14768</td></tr>
+<tr><td>Stroom energiebelasting</td><td>Overheid stroom · Energiebelasting</td><td>Afname · Beide · per kWh</td><td>€0,11085</td></tr>
+<tr><td>Gas levering</td><td>Gasleverancier · Variabele levering</td><td>Afname · Beide · per m³</td><td>€0,71510</td></tr>
+<tr><td>Vaste levering gas</td><td>Gasleverancier · Vaste levering</td><td>Vast bedrag · Beide · per maand</td><td>€5,99</td></tr>
+<tr><td>Netbeheer gas</td><td>Netbeheerder gas · Netbeheerkosten</td><td>Vast bedrag · Beide · per jaar</td><td>€266,63</td></tr>
+<tr><td>Vermindering energiebelasting</td><td>Overheid stroom · Vermindering energiebelasting</td><td>Vast bedrag · Beide · per jaar</td><td>−€628,96</td></tr></table></div>
+<p class="hint">Deze voorbeeldbedragen komen uit je aangeleverde kaart. Gebruik de datums
+en bedragen van je eigen contract. Het totaal van €0,26095/kWh is al levering plus
+energiebelasting; voer dat totaal niet nog een keer in. De voorbeeldkaart is inclusief btw.</p>
 <form method="post" action="/rule">{csrf}<div class="grid">
-<label>Bron<select name="source_id" required>{source_options}</select></label>
-<label>Herkenningsnaam<input name="code" placeholder="levering_normaal" required></label>
-<label>Onderdeel<select name="component">{components}</select></label>
-<label>Richting<select name="flow">{flows}</select></label>
-<label>Telwerk<select name="register_code">{registers}</select></label>
-<label>Bedrag in euro, negatief bij vergoeding<input name="amount_eur" inputmode="decimal" required></label>
-<label>Eenheid<select name="basis">{bases}</select></label>
-<label>Btw<select name="includes_vat"><option value="1">Bedrag inclusief btw</option><option value="0">Bedrag exclusief btw</option></select></label>
-<label>Btw-tarief als fractie<input name="vat_rate" value="0.21" inputmode="decimal"></label>
-<label>Ingangsdatum<input name="valid_from" type="date" required></label>
-<label>Einddatum, meestal leeg<input name="valid_until" type="date"></label>
-<label>Verbruiksband<select name="band_quantity">{bands}</select></label>
-<label>Band vanaf<input name="band_from" inputmode="decimal"></label>
-<label>Band tot<input name="band_until" inputmode="decimal"></label>
-<label>Toelichting<input name="notes" maxlength="255"></label></div>
-<button>Concept opslaan</button></form></section>
-<section><h2>Tariefregels</h2><p class="hint">Controleer bron, bedrag, btw, eenheid en datum voordat je activeert.</p>
+<div class="field"><label for="rule-source">Wie brengt dit bedrag in rekening?</label><select id="rule-source" name="source_id" required>{source_options}</select></div>
+<div class="field"><label for="rule-code">Naam van deze tariefregel</label><input id="rule-code" name="code" placeholder="levering stroom normaal" required><small>Gebruik dezelfde naam bij een nieuw tarief voor dit onderdeel.</small></div>
+<div class="field"><label for="rule-component">Welk onderdeel?</label><select id="rule-component" name="component">{components}</select></div>
+<div class="field"><label for="rule-flow">Afname, teruglevering of vast bedrag?</label><select id="rule-flow" name="flow">{flows}</select></div>
+<div class="field"><label for="rule-register">Welk stroomtelwerk?</label><select id="rule-register" name="register_code">{registers}</select><small>Bij gas, water en vaste bedragen: Beide / algemeen.</small></div>
+<div class="field"><label for="rule-amount">Bedrag in euro</label><input id="rule-amount" name="amount_eur" inputmode="decimal" placeholder="0,15010" required><small>Een vergoeding of belastingkorting voer je negatief in.</small></div>
+<div class="field"><label for="rule-basis">Waarvoor geldt dat bedrag?</label><select id="rule-basis" name="basis">{bases}</select></div>
+<div class="field"><label for="rule-vat">Is het ingevulde bedrag inclusief btw?</label><select id="rule-vat" name="includes_vat"><option value="1">Ja, inclusief btw</option><option value="0">Nee, exclusief btw</option></select></div>
+<div class="field"><label for="rule-vat-rate">Btw-percentage</label><input id="rule-vat-rate" name="vat_rate" value="21" inputmode="decimal"><small>Bijvoorbeeld 21. Bij een bedrag zonder btw: 0.</small></div>
+<div class="field"><label for="rule-start">Ingangsdatum van dit bedrag</label><input id="rule-start" name="valid_from" type="date" required></div>
+<div class="field"><label for="rule-end">Einddatum (meestal leeg)</label><input id="rule-end" name="valid_until" type="date"></div></div>
+<details><summary>Alleen voor verbruiksbanden of extra toelichting</summary>
+<p class="hint">Laat dit leeg voor gewone tarieven. Bij een tarief voor bijvoorbeeld
+751–1000 kWh teruglevering kies je de terugleverband en vul je de grenzen in.</p>
+<div class="grid"><div class="field"><label for="rule-band">Welke verbruiksband?</label><select id="rule-band" name="band_quantity">{bands}</select></div>
+<div class="field"><label for="rule-band-from">Band vanaf</label><input id="rule-band-from" name="band_from" inputmode="decimal"></div>
+<div class="field"><label for="rule-band-until">Band tot</label><input id="rule-band-until" name="band_until" inputmode="decimal"></div>
+<div class="field"><label for="rule-notes">Toelichting</label><input id="rule-notes" name="notes" maxlength="255"></div></div></details>
+<button>Tarief als concept opslaan</button></form></section>
+<section><h2>Opgeslagen tariefregels</h2><p class="hint">Controleer bron, bedrag, btw, richting, telwerk, eenheid en datum voordat je activeert.</p>
 <div class="scroll"><table><tr><th>Bron</th><th>Onderdeel</th><th>Bedrag</th><th>Periode</th><th>Status</th><th></th></tr>{rules}</table></div></section>
 </main></html>""".format(
         message='<p class="notice">{}</p>'.format(esc(message)) if message else "",
