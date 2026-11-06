@@ -85,7 +85,21 @@ def _one_row_per_period(
 
 def _pv_by_period(rows, grain, warnings):
     if grain == "day":
-        return _one_row_per_period(rows, grain, "PV")
+        indexed = {}
+        duplicates = {}
+        for row in rows:
+            period = period_key(row["datum"], "day")
+            if period in indexed:
+                duplicates.setdefault(period, [indexed[period]]).append(row)
+            indexed[period] = row
+        for period, candidates in sorted(duplicates.items()):
+            warnings.append(
+                "{}: {} oude PV-dagregels (ids {}); laatste regel id {} "
+                "voorlopig gebruikt, controle vereist".format(
+                    period, len(candidates),
+                    ", ".join(str(row.get("id")) for row in candidates),
+                    indexed[period].get("id")))
+        return indexed
     indexed = {}
     last_value = {}
     reported = set()

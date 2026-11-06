@@ -267,8 +267,9 @@ uitvoermodus vereist daarom expliciet `--pv-unit kWh` of `--pv-unit MWh`
 naast `--apply`. Gebruik die modus pas na een verse backup en een
 geslaagde proef op de brongegevens. De importer verwerkt ruwe rijen in
 kleine transacties en kan na onderbreking opnieuw worden gestart.
-Een dalende oude PV-maandstand verschijnt als waarschuwing met de betrokken
-bron-ID's. De proef gaat verder; `--apply` stopt zolang zulke waarschuwingen
+Een dalende oude PV-maandstand of dubbele PV-dag verschijnt als
+waarschuwing met de betrokken bron-ID's. De proef gaat verder en toont
+voorlopig de laatste regel; `--apply` stopt zolang zulke waarschuwingen
 nog niet zijn beoordeeld.
 
 ## Dagberekening zonder schrijven controleren
