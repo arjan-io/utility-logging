@@ -78,6 +78,40 @@ def export_excess_form(form):
     }
 
 
+def fixed_feedin_form(form):
+    """A monthly feed-in charge is a fixed cost, optionally in an export band."""
+    lower = logic.pick(form, "band_from")
+    upper = logic.pick(form, "band_until")
+    if upper and not lower:
+        raise logic.InputError("Vul ook de ondergrens van de terugleverband in")
+    if lower:
+        start = logic.amount(lower, "Band vanaf")
+        end = logic.amount(upper, "Band tot", optional=True)
+        label = "vanaf_{}".format(str(start.normalize()).replace(".", "_"))
+        if end is not None:
+            label += "_tot_{}".format(str(end.normalize()).replace(".", "_"))
+        code = "terugleverkosten_" + label
+    else:
+        code = "terugleverkosten_vast"
+    return {
+        "source_id": form.get("source_id", ""),
+        "code": code,
+        "component": "feedin_cost",
+        "flow": "none",
+        "register_code": "all",
+        "basis": "per_month",
+        "amount_eur": form.get("amount_eur", ""),
+        "includes_vat": "1",
+        "vat_rate": "0.21",
+        "valid_from": form.get("valid_from", ""),
+        "valid_until": form.get("valid_until", ""),
+        "band_quantity": "settlement_export_kwh" if lower else "",
+        "band_from": lower,
+        "band_until": upper,
+        "notes": "Vaste maandelijkse terugleverkosten",
+    }
+
+
 def page(connection, message=""):
     contracts = logic.rows(connection, """
         SELECT id, commodity, supplier, valid_from, valid_until FROM contract
@@ -117,13 +151,13 @@ def page(connection, message=""):
     """, (today, today, today, today))
     summary, conditional = logic.current_rate_summary(active, today)
     summary_rows = "".join(
-        "<tr><td>{}</td><td>{}</td><td>€{:.5f}/dag</td><td>€{:.5f}/dag</td><td>€{:.5f}/dag</td></tr>".format(
+        "<tr><td>{}</td><td>{}</td><td>€{:.5f}/dag</td><td>€{:.5f}/dag</td><td>€{:.5f}/dag</td><td>€{:.5f}/dag</td></tr>".format(
             esc(LABELS[commodity]),
             ("€{:.5f} dal · €{:.5f} normaal per kWh".format(values["low"], values["high"])
              if commodity == "electricity" else
              "€{:.5f} per m³".format(values["variable_m3"])),
             values["fixed_supply_day"], values["tax_credit_day"],
-            values["network_day"])
+            values["network_day"], values["feedin_cost_day"])
         for commodity, values in summary.items())
     contract_rows = "".join(
         "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>".format(
@@ -209,9 +243,10 @@ table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1
 aparte bronnen. Bedragen blijven in de opgegeven eenheid bewaard.</p>{message}
 <section><h2>Actieve tarieven op {today}</h2>
 <p class="hint">Variabele bedragen zijn levering plus belasting, inclusief btw. Vaste bedragen zijn
-alleen voor deze kalenderdag omgerekend. Netbeheer staat apart. Regels met een verbruiksband
-of jaarafrekening staan niet in deze eenvoudige optelling ({conditional} zulke regels).</p>
-<div class="scroll"><table><tr><th>Soort</th><th>Variabel</th><th>Vaste levering</th><th>Belastingkorting</th><th>Netbeheer</th></tr>{summary}</table></div></section>
+alleen voor deze kalenderdag omgerekend. Netbeheer en terugleverkosten staan apart.
+Regels met een verbruiksband of afrekening staan niet in deze eenvoudige optelling
+({conditional} zulke regels).</p>
+<div class="scroll"><table><tr><th>Soort</th><th>Variabel</th><th>Vaste levering</th><th>Belastingkorting</th><th>Netbeheer</th><th>Terugleverkosten</th></tr>{summary}</table></div></section>
 <section><h2>1. Leveringscontract</h2>
 <p class="hint">Maak één contract voor stroom, één voor gas en eventueel één voor water.
 Ook wanneer stroom en gas dezelfde leverancier hebben, zijn dit twee contractregels.
@@ -258,6 +293,7 @@ bij activering sluit de oude regel dan vanzelf.</p>
 <tr><td>Gas levering</td><td>Gasleverancier · Variabele levering</td><td>Afname · Beide · per m³</td><td>€0,71510</td></tr>
 <tr><td>Vaste levering gas</td><td>Gasleverancier · Vaste levering</td><td>Vast bedrag · Beide · per maand</td><td>€5,99</td></tr>
 <tr><td>Netbeheer gas</td><td>Netbeheerder gas · Netbeheerkosten</td><td>Vast bedrag · Beide · per jaar</td><td>€266,63</td></tr>
+<tr><td>Vaste terugleverkosten</td><td>Stroomleverancier · Terugleverkosten</td><td>Vast bedrag · Beide · per maand</td><td>€9,47 bij de voorbeeldband</td></tr>
 <tr><td>Vermindering energiebelasting</td><td>Overheid stroom · Vermindering energiebelasting</td><td>Vast bedrag · Beide · per jaar</td><td>−€628,96</td></tr></table></div>
 <p class="hint">Deze voorbeeldbedragen komen uit je aangeleverde kaart. Gebruik de datums
 en bedragen van je eigen contract. Het totaal van €0,26095/kWh is al levering plus
@@ -273,6 +309,20 @@ dus niet als gewone dagopbrengst geboekt.</p>
 <div class="field"><label for="export-start">Ingangsdatum</label><input id="export-start" name="valid_from" type="date" required></div>
 <div class="field"><label for="export-end">Eerste dag waarop dit tarief niet meer geldt</label><input id="export-end" name="valid_until" type="date" required></div></div>
 <button>Terugleververgoeding als concept opslaan</button></form>
+<h3>Vaste terugleverkosten per maand</h3>
+<p class="hint">Dit is een bedrag dat je <strong>betaalt</strong> voor teruglevering.
+Het is geen vergoeding en geen prijs per kWh. De keuzes
+<strong>Terugleverkosten · Vast bedrag · Beide · per maand</strong> staan vast.
+Gebruik een positieve prijs. Als het bedrag afhangt van de jaarhoeveelheid
+teruglevering, vul ook de band in; die wordt pas bij de afrekening bepaald.</p>
+<form method="post" action="/feedin-fixed">{csrf}<div class="grid">
+<div class="field"><label for="feedin-source">Stroomleverancier</label><select id="feedin-source" name="source_id" required>{electricity_suppliers}</select></div>
+<div class="field"><label for="feedin-amount">Bedrag per maand, inclusief btw</label><input id="feedin-amount" name="amount_eur" inputmode="decimal" placeholder="9,47" required></div>
+<div class="field"><label for="feedin-start">Ingangsdatum</label><input id="feedin-start" name="valid_from" type="date" required></div>
+<div class="field"><label for="feedin-end">Eerste dag na dit tarief (optioneel)</label><input id="feedin-end" name="valid_until" type="date"></div>
+<div class="field"><label for="feedin-from">Jaarlijkse teruglevering vanaf kWh (optioneel)</label><input id="feedin-from" name="band_from" inputmode="decimal" placeholder="751"></div>
+<div class="field"><label for="feedin-until">Jaarlijkse teruglevering tot kWh, exclusief (optioneel)</label><input id="feedin-until" name="band_until" inputmode="decimal" placeholder="1001"><small>Voor 751 t/m 1000 kWh vul je 751 en 1001 in.</small></div></div>
+<button>Vaste terugleverkosten als concept opslaan</button></form>
 <h3>Overige tariefregels</h3>
 <form method="post" action="/rule">{csrf}<div class="grid">
 <div class="field"><label for="rule-source">Wie brengt dit bedrag in rekening?</label><select id="rule-source" name="source_id" required>{source_options}</select></div>
@@ -379,7 +429,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlsplit(self.path).path
         if path not in ("/contract", "/settlement", "/source", "/rule",
-                        "/export-excess", "/activate", "/discard",
+                        "/export-excess", "/feedin-fixed", "/activate", "/discard",
                         "/advance", "/advance-void"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
@@ -413,6 +463,10 @@ class Handler(BaseHTTPRequestHandler):
                     logic.save_rule(connection, export_excess_form(form),
                                     os.environ["TARIFF_ADMIN_USER"])
                     message = "Terugleververgoeding als concept opgeslagen. Controleer en activeer het hieronder."
+                elif path == "/feedin-fixed":
+                    logic.save_rule(connection, fixed_feedin_form(form),
+                                    os.environ["TARIFF_ADMIN_USER"])
+                    message = "Vaste terugleverkosten als concept opgeslagen. Controleer en activeer het hieronder."
                 elif path == "/advance":
                     advance_logic.save_schedule(connection, form)
                     message = "Voorschot opgeslagen."

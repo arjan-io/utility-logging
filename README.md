@@ -301,6 +301,13 @@ per kWh in en geef de geldigheidsperiode op. Onderdeel, richting en 0% btw
 worden automatisch ingevuld. Deze vergoeding voor netto overschot na
 salderen verschijnt pas in de afrekening, niet als gewone dagopbrengst.
 
+Voor **vaste terugleverkosten per maand** staat er een tweede kort formulier.
+Dit is een positieve kost met richting `Vast bedrag`, ook al ontstaat hij
+door teruglevering. Vul bij een verbruiksband de ondergrens en de exclusieve
+bovengrens in; voor 751 t/m 1000 kWh dus 751 en 1001. Zolang de
+terugleverband van de afrekenperiode niet bekend is, boekt de
+dagberekening deze bandkosten niet als een zeker bedrag.
+
 De `publisher` gebruikt actieve leverings- en belastingregels voor zijn
 huidige variabele MQTT-kosten. De aparte dagberekening schrijft vaste
 levering en netbeheer ook naar `daily_cost_line`. De databasegebruiker

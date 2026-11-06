@@ -171,7 +171,8 @@ def current_rate_summary(active_rules, day):
     result = {
         commodity: {"low": Decimal(0), "high": Decimal(0),
                     "variable_m3": Decimal(0), "fixed_supply_day": Decimal(0),
-                    "tax_credit_day": Decimal(0), "network_day": Decimal(0)}
+                    "tax_credit_day": Decimal(0), "network_day": Decimal(0),
+                    "feedin_cost_day": Decimal(0)}
         for commodity in COMMODITIES
     }
     conditional = []
@@ -192,6 +193,12 @@ def current_rate_summary(active_rules, day):
             daily = daily_equivalent(value, rule["basis"], day)
             if daily is not None:
                 target[rule["component"] + "_day"] += daily
+        elif rule["component"] == "feedin_cost":
+            daily = daily_equivalent(value, rule["basis"], day)
+            if daily is not None:
+                target["feedin_cost_day"] += daily
+            else:
+                conditional.append(rule)
         else:
             conditional.append(rule)
     return result, conditional
@@ -334,8 +341,12 @@ def save_rule(connection, form, actor):
             "'Teruglevering boven verbruik' bij stap 4")
     if component == "export_compensation" and rule["flow"] != "export":
         raise InputError("Terugleververgoeding hoort bij teruglevering")
-    if component == "feedin_cost" and rule["flow"] != "export":
-        raise InputError("Terugleverkosten horen bij teruglevering")
+    if component == "feedin_cost":
+        expected_flow = "export" if rule["basis"] == "per_kwh" else "none"
+        if rule["flow"] != expected_flow:
+            raise InputError(
+                "Terugleverkosten per kWh horen bij Teruglevering; "
+                "per dag, maand of jaar kies je Vast bedrag")
     if component in ("tax_credit", "export_compensation") and rule["amount_eur"] > 0:
         raise InputError("Een vergoeding hoort als negatief bedrag te worden ingevoerd")
     if component not in ("tax_credit", "export_compensation") and rule["amount_eur"] < 0:
