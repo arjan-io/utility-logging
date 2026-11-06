@@ -98,7 +98,7 @@ def page(connection, message=""):
         SELECT r.id, r.code, r.component, r.flow, r.register_code,
                r.basis, r.amount_eur, r.includes_vat, r.vat_rate,
                r.valid_from, r.valid_until, r.status, r.band_quantity,
-               r.band_from, r.band_until, s.commodity, s.source_kind,
+               r.band_from, r.band_until, r.notes, s.commodity, s.source_kind,
                s.source_name
         FROM tariff_rule r JOIN tariff_source s ON s.id=r.tariff_source_id
         ORDER BY r.valid_from DESC, r.id DESC LIMIT 200
@@ -167,7 +167,14 @@ def page(connection, message=""):
         if row["status"] == "draft":
             action = ('<form method="post" action="/activate">{}'
                       '<input type="hidden" name="id" value="{}">'
-                      '<button>Activeren</button></form>').format(csrf_field(), row["id"])
+                      '<button>Activeren</button></form>'
+                      '<form method="post" action="/discard">{}'
+                      '<input type="hidden" name="id" value="{}">'
+                      '<button class="muted">Concept verwerpen</button></form>').format(
+                          csrf_field(), row["id"], csrf_field(), row["id"])
+        status_label = ("verworpen concept" if row["status"] == "superseded"
+                        and (row["notes"] or "").startswith("[verworpen]") else
+                        row["status"])
         rule_rows.append(
             "<tr><td>{} · {} · {}</td><td>{}<small>{} · {} · {}{}</small></td>"
             "<td>€{} {}{}<small>{}</small></td><td>{} – {}</td><td>{}</td><td>{}</td></tr>".format(
@@ -178,7 +185,7 @@ def page(connection, message=""):
                 esc(row["amount_eur"]), esc(LABELS[row["basis"]]), daily_text,
                 esc(vat_text),
                 esc(row["valid_from"]), esc(row["valid_until"] or "volgende invoer"),
-                esc(row["status"]), action))
+                esc(status_label), action))
     return """<!doctype html><html lang="nl"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tarievenbeheer</title><style>
@@ -191,6 +198,7 @@ input,select{{display:block;width:100%;min-height:2.8rem;padding:.55rem;box-sizi
  border:1px solid #8296a0;border-radius:6px}}
 input:focus,select:focus{{outline:3px solid #7bc9c4;outline-offset:2px}}
 button{{background:#08736f;color:white;border:0;border-radius:6px;padding:.6rem 1rem;cursor:pointer}}
+.muted{{background:#687b83}}td form{{display:inline-block;margin:0 .35rem .35rem 0}}
 table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1e5;padding:.6rem;text-align:left;vertical-align:top}}
 .scroll{{overflow-x:auto}}small{{display:block;color:#586c78}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
 .hint{{color:#425863}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1rem}}
@@ -285,7 +293,9 @@ dus niet als gewone dagopbrengst geboekt.</p>
 <div class="field"><label for="rule-band-until">Band tot</label><input id="rule-band-until" name="band_until" inputmode="decimal"></div>
 <div class="field"><label for="rule-notes">Toelichting</label><input id="rule-notes" name="notes" maxlength="255"></div></div></details>
 <button>Tarief als concept opslaan</button></form></section>
-<section><h2>Opgeslagen tariefregels</h2><p class="hint">Controleer bron, bedrag, btw, richting, telwerk, eenheid en datum voordat je activeert.</p>
+<section><h2>Opgeslagen tariefregels</h2><p class="hint">Controleer bron, bedrag, btw, richting, telwerk, eenheid en datum voordat je activeert.
+Een concept kun je verwerpen; het telt dan niet mee. Een actief tarief blijft bewaard voor de historie.
+Een correctie voer je in als nieuwe regel met dezelfde naam en de juiste ingangsdatum.</p>
 <div class="scroll"><table><tr><th>Bron</th><th>Onderdeel</th><th>Bedrag</th><th>Periode</th><th>Status</th><th></th></tr>{rules}</table></div></section>
 </main></html>""".format(
         message='<p class="notice">{}</p>'.format(esc(message)) if message else "",
@@ -358,7 +368,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlsplit(self.path).path
         if path not in ("/contract", "/settlement", "/source", "/rule",
-                        "/export-excess", "/activate"):
+                        "/export-excess", "/activate", "/discard"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if self.headers.get("Content-Type", "").split(";", 1)[0] != "application/x-www-form-urlencoded":
@@ -390,9 +400,12 @@ class Handler(BaseHTTPRequestHandler):
                     logic.save_rule(connection, export_excess_form(form),
                                     os.environ["TARIFF_ADMIN_USER"])
                     message = "Terugleververgoeding als concept opgeslagen. Controleer en activeer het hieronder."
-                else:
+                elif path == "/activate":
                     logic.activate_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
                     message = "Tariefregel geactiveerd; vorige regel met dezelfde naam afgesloten."
+                else:
+                    logic.discard_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
+                    message = "Concept verworpen; het telt niet mee in de berekeningen."
                 connection.commit()
                 self.send_response(HTTPStatus.SEE_OTHER)
                 self.send_header("Location", "/?notice=" + quote(message))

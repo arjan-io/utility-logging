@@ -286,6 +286,11 @@ eenheid en datum. Regels met een verbruiksband en de afrekening van
 saldering staan afzonderlijk; het eenvoudige overzicht telt die niet
 bij de actuele variabele afnametarieven op.
 
+Een fout concept kun je met **Concept verwerpen** buiten gebruik stellen.
+Het blijft als administratief spoor bewaard en telt niet mee. Een actief
+tarief wordt niet verwijderd; maak voor een correctie een nieuwe regel
+met dezelfde naam en de juiste ingangsdatum en activeer die.
+
 Voor **Teruglevering boven verbruik (geen btw)** staat bij stap 4 een kort
 formulier. Kies de stroomleverancier, vul de vergoeding als negatief bedrag
 per kWh in en geef de geldigheidsperiode op. Onderdeel, richting en 0% btw

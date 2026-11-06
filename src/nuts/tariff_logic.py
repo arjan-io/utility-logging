@@ -425,3 +425,14 @@ def activate_rule(connection, rule_id):
     execute(connection, """
         UPDATE tariff_rule SET status='active', supersedes_rule_id=%s WHERE id=%s
     """, (replaced, rule_id))
+
+
+def discard_rule(connection, rule_id):
+    rule = one(connection, "SELECT status, notes FROM tariff_rule WHERE id=%s FOR UPDATE",
+               (rule_id,))
+    if rule is None or rule["status"] != "draft":
+        raise InputError("Alleen een concept kan worden verworpen")
+    note = ("[verworpen] " + (rule["notes"] or ""))[:255]
+    execute(connection, """
+        UPDATE tariff_rule SET status='superseded', notes=%s WHERE id=%s
+    """, (note, rule_id))
