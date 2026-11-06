@@ -263,7 +263,9 @@ kleine transacties en kan na onderbreking opnieuw worden gestart.
 
 De dagcontrole gebruikt alleen `SELECT` op `nuts_v2`. Ze toont per bron
 het aantal rijen rond de daggrenzen, de eerste en laatste UTC-meettijd,
-het berekende verbruik en de kwaliteitsstatus. Er worden geen dag- of
+het berekende verbruik en de kwaliteitsstatus. Als een bestaande
+geïmporteerde dagwaarde behouden blijft, staat de bron in
+`preserved_existing`. Er worden geen dag- of
 maandregels opgeslagen:
 
 ```sh
