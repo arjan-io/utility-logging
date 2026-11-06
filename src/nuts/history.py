@@ -113,19 +113,20 @@ def _pv_by_period(rows, grain, warnings):
             else:
                 ambiguous_months.discard(month)
                 value = _decimal(candidates[0]["eMaand"])
-                month_max[month] = max(value, month_max.get(month, value))
+                if month not in month_max or value > month_max[month][0]:
+                    month_max[month] = (value, candidates[0])
     for month in sorted(ambiguous_months):
         warnings.append(
             "{}: laatste PV-maandstand heeft dubbele bronregels; "
             "maandopbrengst onbekend".format(month))
     if grain == "month":
         for month, row in indexed.items():
-            if row is not None and _decimal(row["eMaand"]) < month_max[month]:
-                indexed[month] = None
+            if row is not None and _decimal(row["eMaand"]) < month_max[month][0]:
+                indexed[month] = month_max[month][1]
                 warnings.append(
                     "{}: laatste PV-maandstand {} is lager dan eerdere stand {}; "
-                    "maandopbrengst onbekend".format(
-                        month, row["eMaand"], month_max[month]))
+                    "hoogste bruikbare stand als schatting gebruikt".format(
+                        month, row["eMaand"], month_max[month][0]))
     return indexed
 
 
