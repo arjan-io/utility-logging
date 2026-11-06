@@ -247,6 +247,10 @@ kunnen bijvoorbeeld op 1 januari ingaan.
 Dezelfde tabellen kunnen later door een nieuwe Node-website worden gelezen;
 deze beheerpagina is een tijdelijke, zelfstandige invoerroute voor de
 migratie.
+De webdienst kan meerdere aanvragen tegelijk verwerken. Als een pagina meer
+dan een halve seconde duurt, vermeldt de containerlog apart de tijd voor
+MariaDB verbinden en voor laden/verzenden. Gebruik bij traagheid
+`docker compose logs --since=10m tariffs` om de vertraging te lokaliseren.
 
 Zet `TARIFF_ADMIN_USER` en een eigen sterk `TARIFF_ADMIN_PASSWORD` in
 de lokale `.env`. Start vervolgens de aparte dienst:
@@ -326,6 +330,22 @@ verbruiksafhankelijke terugleverkosten blijven schattingen tot de
 afrekening; regels met een onbekende afrekenband worden niet als nul
 geboekt. De oude `nota.php`-functie kan later worden opgebouwd uit
 maandverbruik en maandkosten.
+
+## Voorschotten
+
+Voer eerst de apart aangeleverde phpMyAdmin-SQL voor `advance_schedule` en
+`advance_schedule_contract` uit. Daarna opent **Voorschotten** bovenaan
+de tarievenpagina een apart invoerscherm. Een voorschot is het afgesproken
+bedrag per betaling, geen geregistreerde bankbetaling en geen onderdeel
+van het energietarief.
+
+Kies één stroom-, gas- of watercontract, of kies stroom en gas samen.
+Een gezamenlijk voorschot heeft één bedrag en twee contractkoppelingen;
+tel het in een toekomstig `nota`-overzicht maar één keer. Water kan alleen
+apart worden gekoppeld. Vul het bedrag per maand of kwartaal, de
+ingangsdatum en de eerste betaaldatum in. Een nieuw bedrag voor dezelfde
+contracten sluit de vorige regeling op zijn ingangsdatum. Een foutieve
+regeling kun je verwerpen; het administratieve record blijft bewaard.
 
 ## Historische import voorbereiden
 

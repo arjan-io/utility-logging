@@ -6,13 +6,14 @@ import hmac
 import html
 import os
 import secrets
+import time
 from datetime import datetime
 from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlsplit
 from zoneinfo import ZoneInfo
 
-from . import tariff_logic as logic
+from . import advance_admin, advance_logic, tariff_logic as logic
 
 
 TOKEN = secrets.token_urlsafe(32)
@@ -203,7 +204,7 @@ table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1
 .scroll{{overflow-x:auto}}small{{display:block;color:#586c78}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
 .hint{{color:#425863}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1rem}}
 .example{{background:#f0f6f7;border-left:4px solid #08736f;padding:.7rem 1rem;margin:.7rem 0}}
-</style><main><h1>Tarievenbeheer</h1>
+</style><main><nav><a href="/advances">Voorschotten →</a></nav><h1>Tarievenbeheer</h1>
 <p class="hint">Stroom, gas en water hebben elk hun eigen contractlijn. Netbeheer en overheid zijn
 aparte bronnen. Bedragen blijven in de opgegeven eenheid bewaard.</p>{message}
 <section><h2>Actieve tarieven op {today}</h2>
@@ -348,33 +349,45 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if not self.require_auth():
             return
-        if urlsplit(self.path).path != "/":
+        path = urlsplit(self.path).path
+        if path not in ("/", "/advances"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         connection = None
+        started = time.monotonic()
+        connected = started
         try:
             connection = database()
+            connected = time.monotonic()
             notice = parse_qs(urlsplit(self.path).query).get("notice", [""])[0]
-            self.html(HTTPStatus.OK, page(connection, notice[:200]))
+            rendered = (page(connection, notice[:200]) if path == "/" else
+                        advance_admin.page(connection, TOKEN, notice[:200]))
+            self.html(HTTPStatus.OK, rendered)
         except Exception as exc:
             print("Tarievenpagina: {}".format(exc), flush=True)
             self.html(HTTPStatus.SERVICE_UNAVAILABLE, "Database tijdelijk niet bereikbaar")
         finally:
             if connection is not None:
                 connection.close()
+            elapsed = time.monotonic() - started
+            if elapsed >= 0.5:
+                print("Langzame pagina {}: verbinden {:.2f}s, laden/verzenden {:.2f}s".format(
+                    path, connected - started, elapsed - (connected - started)), flush=True)
 
     def do_POST(self):
         if not self.require_auth():
             return
         path = urlsplit(self.path).path
         if path not in ("/contract", "/settlement", "/source", "/rule",
-                        "/export-excess", "/activate", "/discard"):
+                        "/export-excess", "/activate", "/discard",
+                        "/advance", "/advance-void"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         if self.headers.get("Content-Type", "").split(";", 1)[0] != "application/x-www-form-urlencoded":
             self.send_error(HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
             return
         try:
+            started = time.monotonic()
             length = int(self.headers.get("Content-Length", "0"))
             if length < 1 or length > 16384:
                 raise logic.InputError("Formulier is te groot of leeg")
@@ -400,6 +413,13 @@ class Handler(BaseHTTPRequestHandler):
                     logic.save_rule(connection, export_excess_form(form),
                                     os.environ["TARIFF_ADMIN_USER"])
                     message = "Terugleververgoeding als concept opgeslagen. Controleer en activeer het hieronder."
+                elif path == "/advance":
+                    advance_logic.save_schedule(connection, form)
+                    message = "Voorschot opgeslagen."
+                elif path == "/advance-void":
+                    advance_logic.void_schedule(
+                        connection, logic.positive_id(form.get("id", ""), "Voorschot"))
+                    message = "Voorschot verworpen; het telt niet mee."
                 elif path == "/activate":
                     logic.activate_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
                     message = "Tariefregel geactiveerd; vorige regel met dezelfde naam afgesloten."
@@ -408,7 +428,8 @@ class Handler(BaseHTTPRequestHandler):
                     message = "Concept verworpen; het telt niet mee in de berekeningen."
                 connection.commit()
                 self.send_response(HTTPStatus.SEE_OTHER)
-                self.send_header("Location", "/?notice=" + quote(message))
+                destination = "/advances" if path.startswith("/advance") else "/"
+                self.send_header("Location", destination + "?notice=" + quote(message))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
             except Exception:
@@ -417,10 +438,18 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 connection.close()
         except logic.InputError as exc:
-            self.html(HTTPStatus.BAD_REQUEST, "<h1>Controleer invoer</h1><p>{}</p><p><a href='/'>Terug</a></p>".format(esc(exc)))
+            destination = "/advances" if path.startswith("/advance") else "/"
+            self.html(HTTPStatus.BAD_REQUEST,
+                      "<h1>Controleer invoer</h1><p>{}</p><p><a href='{}'>Terug</a></p>".format(
+                          esc(exc), destination))
         except Exception as exc:
             print("Tariefopslag: {}".format(exc), flush=True)
             self.html(HTTPStatus.INTERNAL_SERVER_ERROR, "Opslaan mislukt; controleer de containerlog")
+        finally:
+            if "started" in locals():
+                elapsed = time.monotonic() - started
+                if elapsed >= 0.5:
+                    print("Langzame opslag {}: {:.2f}s".format(path, elapsed), flush=True)
 
 
 def main():
@@ -428,7 +457,7 @@ def main():
         raise SystemExit("TARIFF_ADMIN_USER en TARIFF_ADMIN_PASSWORD ontbreken")
     port = 8765
     print("Tarievenbeheer op poort {}".format(port), flush=True)
-    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    ThreadingHTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
 
 if __name__ == "__main__":
