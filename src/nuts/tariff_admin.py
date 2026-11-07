@@ -214,9 +214,11 @@ def page(connection, message=""):
                         "ingetrokken" if row["status"] == "superseded"
                         and (row["notes"] or "").startswith("[ingetrokken]") else
                         row["status"])
+        row_class = ' class="inactive"' if status_label in ("verworpen concept", "ingetrokken") else ""
         rule_rows.append(
-            "<tr><td>{} · {} · {}</td><td>{}<small>{} · {} · {}{}</small></td>"
+            "<tr{}><td>{} · {} · {}</td><td>{}<small>{} · {} · {}{}</small></td>"
             "<td>€{} {}{}<small>{}</small></td><td>{} – {}</td><td>{}</td><td>{}</td></tr>".format(
+                row_class,
                 esc(LABELS[row["commodity"]]), esc(LABELS[row["source_kind"]]),
                 esc(row["source_name"]), esc(LABELS[row["component"]]),
                 esc(row["code"]), esc(LABELS[row["flow"]]),
@@ -239,6 +241,7 @@ input:focus,select:focus{{outline:3px solid #7bc9c4;outline-offset:2px}}
 button{{background:#08736f;color:white;border:0;border-radius:6px;padding:.6rem 1rem;cursor:pointer}}
 .muted{{background:#687b83}}td form{{display:inline-block;margin:0 .35rem .35rem 0}}
 table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1e5;padding:.6rem;text-align:left;vertical-align:top}}
+.inactive td{{background:#ffe1e3}}
 .scroll{{overflow-x:auto}}small{{display:block;color:#586c78}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
 .hint{{color:#425863}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1rem}}
 .example{{background:#f0f6f7;border-left:4px solid #08736f;padding:.7rem 1rem;margin:.7rem 0}}
