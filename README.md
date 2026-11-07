@@ -338,6 +338,21 @@ heeft hiervoor naast zijn bestaande rechten `DELETE` op alleen
 tariefwijziging. Start de berekening nadat `aggregate` loopt en de
 tarieven zijn ingevoerd:
 
+Controleer vooraf de ingevoerde tarieven en de rekenregels zonder bestaande
+daggegevens. De onderstaande opdracht leest alleen uit MariaDB. Ze rekent
+met duidelijk gemarkeerd fictief verbruik: 4 kWh normaal, 2 kWh dal,
+1 m³ gas, 0,1 m³ water en 1 kWh teruglevering. Gebruik twee datums om
+de overgang op 1 januari 2027 te zien. Het resultaat toont ook welke
+afrekenbanden niet als zekere dagkosten kunnen worden geboekt:
+
+```sh
+docker compose build costs
+docker compose run --rm --no-deps costs python -m nuts.tariff_check \
+  --day 2026-11-07 --day 2027-01-01
+```
+
+Start daarna, wanneer echte dagtotalen beschikbaar zijn:
+
 ```sh
 docker compose --profile costs up -d costs
 ```

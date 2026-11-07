@@ -96,15 +96,12 @@ def rows(connection, statement, params):
         cursor.close()
 
 
-def calculate_day(connection, day):
-    usage_rows = rows(connection, "SELECT * FROM daily_usage WHERE usage_date=%s",
-                      (day,))
-    if not usage_rows:
-        return None
-    rules = rows(connection, """
-        SELECT r.id, r.component, r.flow, r.register_code, r.basis,
+def active_rules(connection, day):
+    return rows(connection, """
+        SELECT r.id, r.code, r.component, r.flow, r.register_code, r.basis,
                r.amount_eur, r.includes_vat, r.vat_rate, r.band_quantity,
-               s.commodity
+               r.band_from, r.band_until,
+               s.commodity, s.source_name
         FROM tariff_rule r JOIN tariff_source s ON s.id=r.tariff_source_id
         LEFT JOIN contract c ON c.id=s.contract_id
         WHERE r.status='active' AND r.valid_from<=%s
@@ -112,6 +109,9 @@ def calculate_day(connection, day):
           AND (s.source_kind<>'supplier' OR
                (c.valid_from<=%s AND (c.valid_until IS NULL OR c.valid_until>%s)))
     """, (day, day, day, day))
+
+
+def electricity_policy(connection, day):
     policies = rows(connection, """
         SELECT p.electricity_policy FROM settlement_period p
         JOIN contract c ON c.id=p.contract_id
@@ -121,8 +121,16 @@ def calculate_day(connection, day):
     """, (day, day, day, day))
     if len(policies) > 1:
         raise ValueError("Meerdere afrekenwijzen op {}".format(day))
-    policy = policies[0]["electricity_policy"] if policies else None
-    return calculate_lines(day, usage_rows[0], rules, policy)
+    return policies[0]["electricity_policy"] if policies else None
+
+
+def calculate_day(connection, day):
+    usage_rows = rows(connection, "SELECT * FROM daily_usage WHERE usage_date=%s",
+                      (day,))
+    if not usage_rows:
+        return None
+    return calculate_lines(day, usage_rows[0], active_rules(connection, day),
+                           electricity_policy(connection, day))
 
 
 def save_day(connection, day):
