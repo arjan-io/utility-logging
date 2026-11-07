@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlsplit
 from zoneinfo import ZoneInfo
 
-from . import advance_admin, advance_logic, tariff_logic as logic, tariff_quick
+from . import advance_admin, advance_logic, tariff_logic as logic, tariff_overview, tariff_quick
 
 
 TOKEN = secrets.token_urlsafe(32)
@@ -21,7 +21,7 @@ LABELS = {
     "electricity": "Stroom", "gas": "Gas", "water": "Water",
     "supplier": "Leverancier", "network_operator": "Netbeheerder",
     "government": "Overheid", "supply": "Variabele levering",
-    "energy_tax": "Energiebelasting", "fixed_supply": "Vaste levering",
+    "energy_tax": "Belasting op verbruik", "fixed_supply": "Vaste levering",
     "tax_credit": "Vermindering energiebelasting",
     "export_compensation": "Terugleververgoeding",
     "feedin_cost": "Terugleverkosten", "network": "Netbeheerkosten",
@@ -42,6 +42,8 @@ def component_label(component, commodity):
         return {"supply": "Drinkwaterverbruik",
                 "fixed_supply": "Vastrecht drinkwater",
                 "energy_tax": "Belasting op leidingwater"}.get(component, LABELS[component])
+    if component == "energy_tax":
+        return "Energiebelasting"
     return LABELS[component]
 
 
@@ -258,7 +260,7 @@ table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1
 .scroll{{overflow-x:auto}}small{{display:block;color:#586c78}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
 .hint{{color:#425863}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1rem}}
 .example{{background:#f0f6f7;border-left:4px solid #08736f;padding:.7rem 1rem;margin:.7rem 0}}
-</style><main><nav><a href="/new">Bedrag invoeren →</a> · <a href="/advances">Voorschotten</a></nav><h1>Tarievenbeheer</h1>
+</style><main><nav><a href="/">← Stroom, gas en water</a> · <a href="/new">Bedrag invoeren →</a> · <a href="/advances">Voorschotten</a></nav><h1>Uitgebreid tarievenbeheer</h1>
 <p class="hint">Stroom, gas en water hebben elk hun eigen contractlijn. Netbeheer en overheid zijn
 aparte bronnen. Bedragen blijven in de opgegeven eenheid bewaard.</p>{message}
 <section><h2>Actieve tarieven op {today}</h2>
@@ -387,31 +389,38 @@ kun je intrekken en opnieuw invoeren. Ingetrokken regels blijven zichtbaar voor 
 def withdrawal_page(connection, rule_id):
     rule = logic.one(connection, """
         SELECT r.status, r.amount_eur, r.basis, r.valid_from, r.valid_until,
-               r.code, s.source_name
+               r.code, s.source_name, s.commodity
         FROM tariff_rule r JOIN tariff_source s ON s.id=r.tariff_source_id
         WHERE r.id=%s
     """, (rule_id,))
     if rule is None or rule["status"] != "active":
         raise logic.InputError("Dit tarief is niet meer actief")
+    back = tariff_overview.PATHS[rule["commodity"]]
     return '''<!doctype html><html lang="nl"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Tarief intrekken</title>
 <style>body{{font:16px system-ui,sans-serif;max-width:650px;margin:2rem auto;padding:0 1rem;color:#183242}}
 button{{background:#9f352b;color:white;border:0;border-radius:6px;padding:.7rem 1rem;cursor:pointer}}
 .card{{border:1px solid #c6d5dd;border-radius:12px;padding:1rem;margin:1rem 0}}</style>
-<main><p><a href="/">← Tarievenoverzicht</a></p><h1>Tarief intrekken</h1>
+<main><p><a href="{back}">← Tarievenoverzicht</a></p><h1>Tarief intrekken</h1>
 <div class="card"><strong>{source}</strong><p>{code}: €{amount} {basis}<br>
 Vanaf {start} tot {end}</p></div>
 <p>Dit tarief telt daarna niet meer mee. De regel blijft zichtbaar in de historie.
 Voer het juiste tarief daarna opnieuw in.</p>
 <form method="post" action="/withdraw">{csrf}
 <input type="hidden" name="id" value="{id}">
+<input type="hidden" name="return_to" value="{back}">
 <input type="hidden" name="confirm" value="1"><button>Ja, dit tarief intrekken</button></form>
 </main></html>'''.format(
         source=esc(rule["source_name"]), code=esc(rule["code"]),
         amount=esc(rule["amount_eur"]), basis=esc(LABELS[rule["basis"]]),
         start=esc(rule["valid_from"]), end=esc(rule["valid_until"] or "volgende invoer"),
-        csrf=csrf_field(), id=rule_id)
+        csrf=csrf_field(), id=rule_id, back=back)
+
+
+def return_page(form):
+    target = form.get("return_to", "")
+    return target if target in tariff_overview.PATHS.values() else "/setup"
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -451,7 +460,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self.require_auth():
             return
         path = urlsplit(self.path).path
-        if path not in ("/", "/advances", "/new", "/withdraw"):
+        if path not in ("/", "/stroom", "/gas", "/water", "/archief",
+                        "/setup", "/advances", "/new", "/withdraw"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         connection = None
@@ -461,10 +471,22 @@ class Handler(BaseHTTPRequestHandler):
             query = parse_qs(urlsplit(self.path).query)
             notice = query.get("notice", [""])[0][:200]
             selected = query.get("type", [""])[0]
-            if path != "/new" or selected in tariff_quick.TEMPLATES:
+            commodity = query.get("commodity", [""])[0]
+            if path == "/archief":
+                commodity = query.get("soort", [""])[0]
+                if commodity not in tariff_overview.PATHS:
+                    raise logic.InputError("Kies stroom, gas of water voor het archief")
+            if path in ("/stroom", "/gas", "/water"):
+                commodity = {value: key for key, value in tariff_overview.PATHS.items()}[path]
+            if path not in ("/", "/new") or selected in tariff_quick.TEMPLATES:
                 connection = database()
                 connected = time.monotonic()
             if path == "/":
+                rendered = tariff_overview.home_page()
+            elif path in ("/stroom", "/gas", "/water", "/archief"):
+                rendered = tariff_overview.commodity_page(
+                    connection, commodity, TOKEN, path == "/archief", notice)
+            elif path == "/setup":
                 rendered = page(connection, notice)
             elif path == "/advances":
                 rendered = advance_admin.page(connection, TOKEN, notice)
@@ -472,7 +494,7 @@ class Handler(BaseHTTPRequestHandler):
                 rendered = withdrawal_page(
                     connection, logic.positive_id(query.get("id", [""])[0], "Tariefregel"))
             else:
-                rendered = tariff_quick.page(connection, TOKEN, selected, notice)
+                rendered = tariff_quick.page(connection, TOKEN, selected, notice, commodity)
             self.html(HTTPStatus.OK, rendered)
         except logic.InputError as exc:
             self.html(HTTPStatus.BAD_REQUEST,
@@ -544,7 +566,7 @@ class Handler(BaseHTTPRequestHandler):
                     message = "{} opgeslagen en geactiveerd.".format(label)
                 elif path == "/activate":
                     logic.activate_rule(connection, logic.positive_id(form.get("id", ""), "Tariefregel"))
-                    message = "Tariefregel geactiveerd; vorige regel met dezelfde naam afgesloten."
+                    message = "Tariefregel geactiveerd; een vorig tarief voor hetzelfde onderdeel is zo nodig afgesloten."
                 elif path == "/withdraw":
                     if form.get("confirm") != "1":
                         raise logic.InputError("Bevestig dat je dit tarief wilt intrekken")
@@ -555,11 +577,13 @@ class Handler(BaseHTTPRequestHandler):
                     message = "Concept verworpen; het telt niet mee in de berekeningen."
                 connection.commit()
                 self.send_response(HTTPStatus.SEE_OTHER)
-                destination = "/advances" if path.startswith("/advance") else "/"
-                if path == "/new":
-                    destination = "/new?type={}&notice=".format(quote(form["template"]))
+                if path.startswith("/advance"):
+                    destination = "/advances"
+                elif path == "/new":
+                    destination = tariff_overview.PATHS[tariff_quick.TEMPLATES[form["template"]][2]]
                 else:
-                    destination += "?notice="
+                    destination = return_page(form)
+                destination += "?notice="
                 self.send_header("Location", destination + quote(message))
                 self.send_header("Cache-Control", "no-store")
                 self.end_headers()
@@ -569,9 +593,11 @@ class Handler(BaseHTTPRequestHandler):
             finally:
                 connection.close()
         except logic.InputError as exc:
-            destination = "/advances" if path.startswith("/advance") else "/"
+            destination = "/advances" if path.startswith("/advance") else "/setup"
             if path == "/new":
                 destination = "/new?type=" + quote(form.get("template", "")) if "form" in locals() else "/new"
+            elif "form" in locals():
+                destination = return_page(form)
             self.html(HTTPStatus.BAD_REQUEST,
                       "<h1>Controleer invoer</h1><p>{}</p><p><a href='{}'>Terug</a></p>".format(
                           esc(exc), destination))

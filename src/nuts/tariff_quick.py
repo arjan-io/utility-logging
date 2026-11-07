@@ -30,6 +30,7 @@ TEMPLATES = {
 
 COMMODITY = {"electricity": "stroom", "gas": "gas", "water": "water"}
 SOURCE = {"supplier": "leverancier", "government": "overheid", "network_operator": "netbeheerder"}
+ROUTES = {"electricity": "/stroom", "gas": "/gas", "water": "/water"}
 
 
 def esc(value):
@@ -99,14 +100,23 @@ def save_and_activate(connection, form, actor):
     return TEMPLATES[key][0]
 
 
-def page(connection, csrf, selected="", message=""):
+def page(connection, csrf, selected="", message="", commodity=""):
     notice = '<p class="notice">{}</p>'.format(esc(message)) if message else ""
+    if selected in TEMPLATES:
+        commodity = TEMPLATES[selected][2]
     if selected not in TEMPLATES:
-        content = '<p>Kies het bedrag dat op je tariefkaart staat. De technische keuzes vullen we voor je in.</p>'
-        for group in ("Levering", "Belasting", "Netbeheer", "Zonnepanelen"):
-            links = "".join('<a class="choice" href="/new?type={}">{}</a>'.format(
-                quote(key), esc(row[0])) for key, row in TEMPLATES.items() if row[1] == group)
-            content += '<section><h2>{}</h2><div class="choices">{}</div></section>'.format(group, links)
+        if commodity not in ROUTES:
+            content = ('<p>Kies eerst de nutssoort.</p><div class="choices">' +
+                       ''.join('<a class="choice" href="/new?commodity={}">{}</a>'.format(
+                           key, esc(name.title())) for key, name in COMMODITY.items()) + '</div>')
+        else:
+            content = '<p>Kies het bedrag dat op je tariefkaart staat. De technische keuzes vullen we voor je in.</p>'
+            for group in ("Levering", "Belasting", "Netbeheer", "Zonnepanelen"):
+                links = "".join('<a class="choice" href="/new?type={}">{}</a>'.format(
+                    quote(key), esc(row[0])) for key, row in TEMPLATES.items()
+                    if row[1] == group and row[2] == commodity)
+                if links:
+                    content += '<section><h2>{}</h2><div class="choices">{}</div></section>'.format(group, links)
     else:
         label, _, commodity, kind, _, _, _, basis = TEMPLATES[selected]
         sources = db.rows(connection, """
@@ -146,7 +156,7 @@ def page(connection, csrf, selected="", message=""):
         sign_hint = ('Gebruik een minteken: dit bedrag ontvang je.' if selected.startswith("terugleververgoeding") else
                      'Gebruik een minteken: dit is een korting.' if selected == "belastingkorting" else
                      'Gebruik een positief bedrag: dit betaal je.')
-        content = '''<p><a href="/new">← Ander bedrag kiezen</a></p><section><h2>{label}</h2>
+        content = '''<p><a href="/new?commodity={commodity_key}">← Ander bedrag kiezen</a></p><section><h2>{label}</h2>
 <p class="hint">Bron: {kind} voor {commodity}. {hint}</p>{no_sources}
 <form method="post" action="/new"><input type="hidden" name="csrf" value="{csrf}">
 <input type="hidden" name="template" value="{selected}"><div class="grid">
@@ -157,9 +167,11 @@ def page(connection, csrf, selected="", message=""):
 <div class="field"><label for="end">Eerste dag na dit tarief (optioneel)</label><input id="end" name="valid_until" type="date"{end_required}></div>
 {vat}</div>{band}<button>Opslaan en activeren</button></form></section>'''.format(
             label=esc(label), kind=SOURCE[kind], commodity=COMMODITY[commodity],
+            commodity_key=commodity,
             hint=esc(sign_hint), csrf=esc(csrf), selected=esc(selected),
             choices=choices, units=units, end_required=end_required,
             vat=vat, band=band, no_sources=no_sources)
+    back = ROUTES.get(commodity, "/")
     return '''<!doctype html><html lang="nl"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Tarief invoeren</title>
 <style>body{{font:16px system-ui,sans-serif;max-width:900px;margin:2rem auto;padding:0 1rem;color:#183242}}
@@ -172,6 +184,6 @@ background:white;color:#183242;border:1px solid #8296a0;border-radius:6px}}
 input:focus,select:focus,.choice:focus{{outline:3px solid #7bc9c4;outline-offset:2px}}
 button{{background:#08736f;color:white;border:0;border-radius:6px;padding:.6rem 1rem;cursor:pointer}}
 .hint{{color:#425863}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}</style>
-<main><nav><a href="/">← Tarievenoverzicht</a> · <a href="/advances">Voorschotten</a></nav>
+<main><nav><a href="{back}">← Tarievenoverzicht</a> · <a href="/advances">Voorschotten</a></nav>
 <h1>Bedrag van je tariefkaart invoeren</h1>{notice}{content}</main></html>'''.format(
-        notice=notice, content=content)
+        notice=notice, content=content, back=back)

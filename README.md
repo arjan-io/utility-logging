@@ -269,7 +269,12 @@ ssh -L 8765:127.0.0.1:8765 pi@utilityPi.localdomain
 ```
 
 Open daarna `http://127.0.0.1:8765/` in de browser en meld je aan met
-de ingevoerde beheernaam en het wachtwoord. De pagina kan draaien terwijl
+de ingevoerde beheernaam en het wachtwoord. Kies vervolgens **Stroom**,
+**Gas** of **Water**. Elke pagina toont alleen de tarieven van die nutssoort;
+afgelopen, ingetrokken, verworpen en vervangen regels staan in een apart
+archief. Contracten, bronnen en voor stroom de afrekenwijze voeg je op de
+betreffende pagina toe. Het oude volledige overzicht blijft bereikbaar via
+`/setup` voor uitzonderingen. De pagina kan draaien terwijl
 de oude P1- en waterlezers actief blijven; ze gebruikt geen GPIO of
 seriële poort.
 
@@ -307,12 +312,13 @@ bij de actuele variabele afnametarieven op.
 
 Een fout concept kun je met **Concept verwerpen** buiten gebruik stellen.
 Een verkeerd actief tarief kun je via **Intrekken** met bevestiging buiten
-gebruik stellen en opnieuw invoeren. Beide regels blijven in het overzicht
+gebruik stellen en opnieuw invoeren. Beide regels blijven in het archief
 staan; ingetrokken regels tellen niet meer mee. Een normaal opvolgend tarief
 kun je meteen invoeren met zijn eigen ingangsdatum.
 
-Voor **Teruglevering boven verbruik (geen btw)** staat bij stap 4 een kort
-formulier. Kies de stroomleverancier, vul de vergoeding als negatief bedrag
+Voor **Teruglevering boven verbruik (geen btw)** kies je op de stroompagina
+**Bedrag invoeren** en daarna de passende terugleververgoeding. Kies de
+stroomleverancier, vul de vergoeding als negatief bedrag
 per kWh in en geef de geldigheidsperiode op. Onderdeel, richting en 0% btw
 worden automatisch ingevuld. Deze vergoeding voor netto overschot na
 salderen verschijnt pas in de afrekening, niet als gewone dagopbrengst.
