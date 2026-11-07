@@ -214,7 +214,10 @@ def page(connection, message=""):
                         "ingetrokken" if row["status"] == "superseded"
                         and (row["notes"] or "").startswith("[ingetrokken]") else
                         row["status"])
-        row_class = ' class="inactive"' if status_label in ("verworpen concept", "ingetrokken") else ""
+        row_style = ("inactive" if status_label in ("verworpen concept", "ingetrokken")
+                     else "tariff-active" if row["status"] == "active"
+                     else "tariff-draft" if row["status"] == "draft" else "")
+        row_class = ' class="{}"'.format(row_style) if row_style else ""
         rule_rows.append(
             "<tr{}><td>{} · {} · {}</td><td>{}<small>{} · {} · {}{}</small></td>"
             "<td>€{} {}{}<small>{}</small></td><td>{} – {}</td><td>{}</td><td>{}</td></tr>".format(
@@ -241,6 +244,8 @@ input:focus,select:focus{{outline:3px solid #7bc9c4;outline-offset:2px}}
 button{{background:#08736f;color:white;border:0;border-radius:6px;padding:.6rem 1rem;cursor:pointer}}
 .muted{{background:#687b83}}td form{{display:inline-block;margin:0 .35rem .35rem 0}}
 table{{border-collapse:collapse;width:100%}}td,th{{border-bottom:1px solid #d9e1e5;padding:.6rem;text-align:left;vertical-align:top}}
+.tariff-active td{{background:#edf7ef}}
+.tariff-draft td{{background:#fff7da}}
 .inactive td{{background:#ffe1e3}}
 .scroll{{overflow-x:auto}}small{{display:block;color:#586c78}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
 .hint{{color:#425863}}.grid{{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:0 1rem}}
