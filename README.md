@@ -288,6 +288,13 @@ pagina toont ter controle het dagbedrag voor de huidige kalenderdag;
 de opslag blijft per maand of jaar. Btw wordt alleen toegevoegd wanneer
 een ingevoerd bedrag exclusief btw is.
 
+Voor drinkwater zijn er aparte keuzes voor verbruik per m³, vastrecht en
+belasting op leidingwater. Dunea is de leverancier voor verbruik en
+vastrecht; de belasting krijgt een waterbron van de overheid. Bij water
+staat de invoer standaard op exclusief 9% btw, zoals op de gedeelde oude
+factuur. Controleer bij elke nieuwe tariefkaart opnieuw of het bedrag
+inclusief of exclusief btw is.
+
 De groene tariefkaart dient als invoercontrole: stroom normaal bestaat
 uit €0,15010 levering plus €0,11085 belasting = €0,26095/kWh;
 stroom dal uit €0,14768 plus €0,11085 = €0,25853/kWh; gas uit

@@ -13,10 +13,11 @@ TEMPLATES = {
     "stroom_vast": ("Vaste levering stroom", "Levering", "electricity", "supplier", "fixed_supply", "none", "all", "fixed"),
     "gas_m3": ("Gas per m³", "Levering", "gas", "supplier", "supply", "import", "all", "per_m3"),
     "gas_vast": ("Vaste levering gas", "Levering", "gas", "supplier", "fixed_supply", "none", "all", "fixed"),
-    "water_m3": ("Water per m³", "Levering", "water", "supplier", "supply", "import", "all", "per_m3"),
-    "water_vast": ("Vaste levering water", "Levering", "water", "supplier", "fixed_supply", "none", "all", "fixed"),
+    "water_m3": ("Drinkwaterverbruik per m³", "Levering", "water", "supplier", "supply", "import", "all", "per_m3"),
+    "water_vast": ("Vastrecht drinkwater", "Levering", "water", "supplier", "fixed_supply", "none", "all", "fixed"),
     "stroom_belasting": ("Energiebelasting stroom", "Belasting", "electricity", "government", "energy_tax", "import", "all", "per_kwh"),
     "gas_belasting": ("Energiebelasting gas", "Belasting", "gas", "government", "energy_tax", "import", "all", "per_m3"),
+    "water_belasting": ("Belasting op leidingwater per m³", "Belasting", "water", "government", "energy_tax", "import", "all", "per_m3"),
     "belastingkorting": ("Vermindering energiebelasting", "Belasting", "electricity", "government", "tax_credit", "none", "all", "fixed"),
     "netbeheer_stroom": ("Netbeheer stroom", "Netbeheer", "electricity", "network_operator", "network", "none", "all", "fixed"),
     "netbeheer_gas": ("Netbeheer gas", "Netbeheer", "gas", "network_operator", "network", "none", "all", "fixed"),
@@ -126,9 +127,12 @@ def page(connection, csrf, selected="", message=""):
                      {"per_kwh": "per kWh", "per_m3": "per m³", "per_month": "per maand"}[basis]))
         vat = ('' if selected.startswith("terugleververgoeding") else
                '<div class="field"><label for="incl">Bedrag op kaart</label><select id="incl" name="includes_vat">'
-               '<option value="1">inclusief btw</option><option value="0">exclusief btw</option></select></div>'
+               '<option value="1"{}>inclusief btw</option><option value="0"{}>exclusief btw</option></select></div>'
                '<div class="field"><label for="vat">Btw-percentage</label>'
-               '<input id="vat" name="vat_rate" value="21" inputmode="decimal"></div>')
+               '<input id="vat" name="vat_rate" value="{}" inputmode="decimal"></div>').format(
+                   '' if commodity == "water" else ' selected',
+                   ' selected' if commodity == "water" else '',
+                   '9' if commodity == "water" else '21')
         band = ('' if selected != "terugleverkosten" else
                 '<fieldset><legend>Terugleverband, als die op je tariefkaart staat</legend>'
                 '<p>Voor 751 t/m 1000 kWh: vanaf 751, tot 1001. Laat beide velden leeg als er geen band is.</p><div class="grid">'

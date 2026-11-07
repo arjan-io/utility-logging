@@ -37,6 +37,14 @@ def esc(value):
     return html.escape("" if value is None else str(value), quote=True)
 
 
+def component_label(component, commodity):
+    if commodity == "water":
+        return {"supply": "Drinkwaterverbruik",
+                "fixed_supply": "Vastrecht drinkwater",
+                "energy_tax": "Belasting op leidingwater"}.get(component, LABELS[component])
+    return LABELS[component]
+
+
 def options(values):
     return "".join('<option value="{}">{}</option>'.format(
         esc(value), esc(LABELS.get(value, value))) for value in values)
@@ -223,7 +231,7 @@ def page(connection, message=""):
             "<td>€{} {}{}<small>{}</small></td><td>{} – {}</td><td>{}</td><td>{}</td></tr>".format(
                 row_class,
                 esc(LABELS[row["commodity"]]), esc(LABELS[row["source_kind"]]),
-                esc(row["source_name"]), esc(LABELS[row["component"]]),
+                esc(row["source_name"]), esc(component_label(row["component"], row["commodity"])),
                 esc(row["code"]), esc(LABELS[row["flow"]]),
                 esc(LABELS[row["register_code"]]), band,
                 esc(row["amount_eur"]), esc(LABELS[row["basis"]]), daily_text,
