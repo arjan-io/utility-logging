@@ -193,7 +193,7 @@ def water_volume(events, start, end, complete_day):
     after = [point for point in points if point[0] >= end]
 
     def allowance(left, right):
-        return timedelta(minutes=75 if left[2] == right[2] == "legacy_import" else 15)
+        return timedelta(minutes=75 if "legacy_import" in (left[2], right[2]) else 15)
 
     if not before or start - before[-1][0] > timedelta(
             minutes=75 if before[-1][2] == "legacy_import" else 15):
