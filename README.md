@@ -40,6 +40,18 @@ voor vaste levering, belastingvermindering en netbeheer. Saldering en
 afrekening van verbruiksbanden vragen nog een afzonderlijke berekening;
 deze versie claimt daarvoor geen factuurbedrag.
 
+De dienst `publisher` maakt uit `nuts_v2` dezelfde JSON-berichten voor
+P1-stroom (`dsmr/electricity`), stroomkosten (`dsmr/kosten`), gasdebiet
+en gaskosten (`dsmr/gas`) en waterdebiet en waterkosten (`water`). De
+oude `usage.py` en het losse waterscript zijn daarvoor niet meer nodig.
+Zet `MQTT_COMPAT_PREFIX=sensors` in de lokale `.env` om deze vier berichten
+ook op de bestaande openHAB-onderwerpen te publiceren, terwijl
+`MQTT_PREFIX=sensors/v2` in proef blijft. Controleer eerst dat de oude
+scripts deze onderwerpen niet meer vullen. Bij een daggrens vóór de
+P1-omschakeling gebruikt de gasberekening de geïmporteerde P1-tijd als
+benadering voor de oude gasstand; nieuwe gasstanden gebruiken de eigen
+DSMR-gastijd.
+
 ## Voorbereiden op de Pi
 
 Gebruik de Docker Compose-plugin met een spatie: `docker compose`. Dit

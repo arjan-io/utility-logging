@@ -72,11 +72,16 @@ class MeterRepository:
 
     def gas_at(self, moment):
         return self.one("""
-            SELECT gas_measured_at_utc, gas_m3
+            SELECT COALESCE(gas_measured_at_utc,
+                            CASE WHEN source = 'legacy_import' THEN measured_at_utc END)
+                   AS gas_measured_at_utc, gas_m3
             FROM p1_reading
-            WHERE gas_measured_at_utc <= %s AND gas_m3 IS NOT NULL
-            ORDER BY gas_measured_at_utc DESC, measured_at_utc DESC LIMIT 1
-        """, (sql_time(moment),))
+            WHERE gas_m3 IS NOT NULL AND
+                  (gas_measured_at_utc <= %s OR
+                   (source = 'legacy_import' AND gas_measured_at_utc IS NULL
+                    AND measured_at_utc <= %s))
+            ORDER BY 1 DESC, measured_at_utc DESC LIMIT 1
+        """, (sql_time(moment), sql_time(moment)))
 
     def water_events(self, start, end):
         margin = timedelta(minutes=75)
@@ -243,6 +248,12 @@ def costs_for_period(repo, commodity, day, start, end, complete_day):
 TOPICS = ("dsmr/electricity", "dsmr/kosten", "dsmr/gas", "water")
 
 
+def topic_targets(suffix, prefix, compat_prefix=""):
+    primary = prefix.rstrip("/") + "/" + suffix
+    secondary = compat_prefix.rstrip("/") + "/" + suffix if compat_prefix else None
+    return (primary, secondary) if secondary and secondary != primary else (primary,)
+
+
 def build_payloads(repo, now=None, topics=None):
     now = now or datetime.now(timezone.utc)
     if now.tzinfo is None:
@@ -302,6 +313,7 @@ def run_forever():
               "password": os.environ["DB_PASSWORD"],
               "database": "nuts_v2", "connection_timeout": 5}
     prefix = os.getenv("MQTT_PREFIX", "sensors/v2").rstrip("/")
+    compat_prefix = os.getenv("MQTT_COMPAT_PREFIX", "").strip().rstrip("/")
     mqtt_host = os.environ["MQTT_HOST"]
     mqtt_port = int(os.getenv("MQTT_PORT", "1883"))
     mqtt_user = os.getenv("MQTT_USER")
@@ -314,9 +326,10 @@ def run_forever():
             try:
                 repo = MeterRepository(connection)
                 def send(suffix, payload):
-                    publish.single(prefix + "/" + suffix,
-                                   payload=json.dumps(payload), hostname=mqtt_host,
-                                   port=mqtt_port, auth=auth, qos=1)
+                    encoded = json.dumps(payload)
+                    for topic in topic_targets(suffix, prefix, compat_prefix):
+                        publish.single(topic, payload=encoded, hostname=mqtt_host,
+                                       port=mqtt_port, auth=auth, qos=1)
 
                 errors = publish_available(repo, send)
                 for suffix, exc in errors.items():
