@@ -128,6 +128,11 @@ Het Dockerfile heeft geen vastgelegde CPU-architectuur: Docker kiest op de
 Voor de P1-poort kies je in `.env` het apparaat op de host. Een stabiel pad
 onder `/dev/serial/by-id/` heeft de voorkeur wanneer dat bestaat. De
 container ziet het altijd als `/dev/p1`.
+De P1-lezer bewaart standaard één geldig telegram per 30 seconden in SQLite
+en daarna in MariaDB. De meter mag elke seconde blijven zenden. Met
+`P1_CAPTURE_SECONDS` in `.env` kun je dit interval aanpassen. Een interval
+van 30 seconden houdt de metingen rond de Nederlandse daggrens ruim binnen
+de grens van twee minuten voor de dagberekening.
 
 Voor de watermeter kies je in `.env` de GPIO-chip met de pinnen van de
 40-pins header. Op de Pi 4 is dat meestal `/dev/gpiochip0`; op de Pi 5

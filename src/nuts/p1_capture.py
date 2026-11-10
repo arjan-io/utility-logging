@@ -31,6 +31,10 @@ def run_forever() -> None:
 
     device = os.environ["P1_DEVICE"]
     path = os.environ["P1_OUTBOX_PATH"]
+    interval = int(os.getenv("P1_CAPTURE_SECONDS", "30"))
+    if interval < 1:
+        raise ValueError("P1_CAPTURE_SECONDS moet minstens 1 zijn")
+    last_saved_at = None
     with Outbox(path, "p1") as outbox:
         while True:
             try:
@@ -40,12 +44,16 @@ def run_forever() -> None:
                     xonxoff=True, timeout=20,
                 ) as port:
                     for telegram in frames(port):
+                        now = time.monotonic()
+                        if last_saved_at is not None and now - last_saved_at < interval:
+                            continue
                         try:
                             reading = parse_telegram(telegram)
                         except ValueError as exc:
                             print("P1-telegram geweigerd: {}".format(exc), flush=True)
                             continue
                         outbox.add_p1(reading)
+                        last_saved_at = time.monotonic()
             except (serial.SerialException, OSError) as exc:
                 print("P1-poort niet beschikbaar: {}".format(exc), flush=True)
                 time.sleep(5)
