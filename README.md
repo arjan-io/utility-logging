@@ -32,9 +32,13 @@ De eenmalige historische importer is ook in de standaardimage opgenomen.
 Hij draait niet als achtergrondservice en begint zonder `--apply` in
 alleen-lezen proefmodus.
 
-De oude MQTT-velden blijven beschikbaar. Met `MQTT_PREFIX=sensors/v2`
-verschijnen ze eerst onder proefonderwerpen. Pas bij de definitieve
-omschakeling wordt de prefix `sensors` gebruikt. De MQTT-kosten zijn
+De MQTT-instellingen voor de definitieve opzet zijn
+`MQTT_PREFIX=sensors` en een lege `MQTT_COMPAT_PREFIX`. Daarmee verschijnen
+de berichten uitsluitend op `sensors/dsmr/electricity`,
+`sensors/dsmr/kosten`, `sensors/dsmr/gas`, `sensors/water` en `sensors/pv`.
+Vul `MQTT_COMPAT_PREFIX` alleen wanneer je bewust tegelijk een tweede
+reeks onderwerpen wilt publiceren. Na een wijziging van deze instellingen
+moeten zowel `publisher` als `pv` opnieuw worden aangemaakt. De MQTT-kosten zijn
 **variabele afnamekosten**. De aparte dienst `costs` berekent dagregels
 voor vaste levering, belastingvermindering en netbeheer. Saldering en
 afrekening van verbruiksbanden vragen nog een afzonderlijke berekening;
@@ -44,16 +48,10 @@ De dienst `publisher` maakt uit `nuts_v2` dezelfde JSON-berichten voor
 P1-stroom (`dsmr/electricity`), stroomkosten (`dsmr/kosten`), gasdebiet
 en gaskosten (`dsmr/gas`) en waterdebiet en waterkosten (`water`). De
 oude `usage.py` en het losse waterscript zijn daarvoor niet meer nodig.
-Zet `MQTT_COMPAT_PREFIX=sensors` in de lokale `.env` om deze vier berichten
-ook op de bestaande openHAB-onderwerpen te publiceren, terwijl
-`MQTT_PREFIX=sensors/v2` in proef blijft. Controleer eerst dat de oude
-scripts deze onderwerpen niet meer vullen. Bij een daggrens vóór de
-P1-omschakeling gebruikt de gasberekening de geïmporteerde P1-tijd als
-benadering voor de oude gasstand; nieuwe gasstanden gebruiken de eigen
-DSMR-gastijd.
-De PV-container leest dezelfde instelling en publiceert zijn bestaande
-`pv[0].pac` en `pv[0].eDag` ook op `sensors/pv`. Herstart zowel `publisher`
-als `pv` nadat je de instelling wijzigt.
+De PV-container publiceert `pv[0].pac` en `pv[0].eDag` op `sensors/pv`.
+Bij een daggrens vóór de P1-omschakeling gebruikt de gasberekening de
+geïmporteerde P1-tijd als benadering voor de oude gasstand; nieuwe
+gasstanden gebruiken de eigen DSMR-gastijd.
 
 Het P1-bericht bevat naast `gebruik.hv` (netafname in W) en `gebruik.hl`
 (teruglevering in W) nu ook `gebruik.pvW` en `gebruik.huisW`.
@@ -145,11 +143,11 @@ Het Dockerfile heeft geen vastgelegde CPU-architectuur: Docker kiest op de
    ```
 4. Start de twee onafhankelijke synchronisatoren met
    `docker compose up -d p1-sync water-sync`. Start voor een MQTT-proef
-   `docker compose --profile publish up -d publisher`; laat de prefix op
-   `sensors/v2` staan.
+   `docker compose --profile publish up -d publisher`; controleer de
+   onderwerpen onder de ingestelde `MQTT_PREFIX`.
 5. Stop **eerst** de oude P1-lezer. Start pas daarna
    `docker compose --profile p1 up -d p1`. Controleer SQLite, MariaDB en
-   de MQTT-proefonderwerpen.
+   de MQTT-onderwerpen.
 6. Stop **eerst** de oude GPIO-lezer. Start pas daarna
    `docker compose --profile water up -d water`. Controleer pulsen tegen
    de fysieke watermeter.
@@ -255,7 +253,7 @@ probeert hij na het ingestelde interval opnieuw. Bij een NAS-storing blijft
 de PV-uitlezing in SQLite staan tot `pv-sync` deze kan afleveren.
 
 `pv` publiceert na iedere bruikbare SEMS+-uitlezing ook naar
-`sensors/v2/pv` (of `<MQTT_PREFIX>/pv`). De velden `pv[0].pac` (watt) en
+`sensors/pv` (of `<MQTT_PREFIX>/pv`). De velden `pv[0].pac` (watt) en
 `pv[0].eDag` (kWh) hebben hetzelfde JSON-pad als het oude GoodWe-script.
 `measuredAtUtc` is het ophaaltijdstip, niet de onbekende meettijd in de
 cloud. Als de dagteller tijdelijk ontbreekt, blijft de laatst ontvangen

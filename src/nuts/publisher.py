@@ -11,6 +11,7 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
+from .mqtt_topics import PUBLISHER_SUFFIXES, configured_topics
 from .usage import day_start_utc
 
 
@@ -278,13 +279,7 @@ def costs_for_period(repo, commodity, day, start, end, complete_day):
     return volume * rates["low"] if volume is not None else None
 
 
-TOPICS = ("dsmr/electricity", "dsmr/kosten", "dsmr/gas", "water")
-
-
-def topic_targets(suffix, prefix, compat_prefix=""):
-    primary = prefix.rstrip("/") + "/" + suffix
-    secondary = compat_prefix.rstrip("/") + "/" + suffix if compat_prefix else None
-    return (primary, secondary) if secondary and secondary != primary else (primary,)
+TOPICS = PUBLISHER_SUFFIXES
 
 
 def build_payloads(repo, now=None, topics=None):
@@ -347,8 +342,10 @@ def run_forever():
               "user": os.environ["DB_USER"],
               "password": os.environ["DB_PASSWORD"],
               "database": "nuts_v2", "connection_timeout": 5}
-    prefix = os.getenv("MQTT_PREFIX", "sensors/v2").rstrip("/")
-    compat_prefix = os.getenv("MQTT_COMPAT_PREFIX", "").strip().rstrip("/")
+    targets = {suffix: configured_topics(suffix) for suffix in TOPICS}
+    print("MQTT onderwerpen: {}".format(
+        ", ".join(topic for topics in targets.values() for topic in topics)),
+        flush=True)
     mqtt_host = os.environ["MQTT_HOST"]
     mqtt_port = int(os.getenv("MQTT_PORT", "1883"))
     mqtt_user = os.getenv("MQTT_USER")
@@ -362,7 +359,7 @@ def run_forever():
                 repo = MeterRepository(connection)
                 def send(suffix, payload):
                     encoded = json.dumps(payload)
-                    for topic in topic_targets(suffix, prefix, compat_prefix):
+                    for topic in targets[suffix]:
                         publish.single(topic, payload=encoded, hostname=mqtt_host,
                                        port=mqtt_port, auth=auth, qos=1)
 

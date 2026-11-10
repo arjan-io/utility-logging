@@ -13,6 +13,7 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from zoneinfo import ZoneInfo
 
 from .outbox import Outbox, utc_timestamp
+from .mqtt_topics import configured_topics
 
 
 VALUE = re.compile(r"\s*([+-]?\d+(?:\.\d+)?)\s*(Wh|kWh|MWh|W|kW)?\s*", re.I)
@@ -163,9 +164,10 @@ def run_forever():
         password=os.environ["GOODWE_PASSWORD"],
         skipload=True,
     )
-    topic = os.getenv("MQTT_PREFIX", "sensors/v2").rstrip("/") + "/pv"
-    compat_prefix = os.getenv("MQTT_COMPAT_PREFIX", "").strip().rstrip("/")
-    compat_topic = compat_prefix + "/pv" if compat_prefix else None
+    topics = configured_topics("pv")
+    topic = topics[0]
+    compat_topic = topics[1] if len(topics) > 1 else None
+    print("PV-MQTT onderwerpen: {}".format(", ".join(topics)), flush=True)
     client = mqtt_client()
     local_tz = ZoneInfo(os.getenv("LOCAL_TIMEZONE", "Europe/Amsterdam"))
     cached_day = None
