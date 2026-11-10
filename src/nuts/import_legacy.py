@@ -43,6 +43,14 @@ FROM `nuts-elekgas`.meetwaarden ORDER BY id
 RAW_WATER = """
 SELECT id, datum, liter FROM `nuts-water`.liter ORDER BY datum, id
 """
+RAW_P1_PAGE = """
+SELECT id, `time`, glt, ght, llt, lht, gas, hv, hl, l1, l2, l3, l3l
+FROM `nuts-elekgas`.meetwaarden WHERE id > %s ORDER BY id LIMIT %s
+"""
+RAW_WATER_PAGE = """
+SELECT id, datum, liter FROM `nuts-water`.liter
+WHERE id > %s ORDER BY id LIMIT %s
+"""
 INSERT_P1 = """
 INSERT INTO nuts_v2.p1_reading
 (event_id, source, measured_at_utc, received_at_utc,
@@ -209,20 +217,40 @@ def prefer_complete_raw_water(old_rows, derived_rows, grain):
     return [indexed[key] for key in sorted(indexed)], differences
 
 
-def import_raw(source, destination, query, convert, statement):
+def import_raw(source, destination, page_query, convert, statement, size=1000):
+    """Import bounded ID pages; a restart safely repeats committed pages."""
     count = 0
-    cursor = destination.cursor()
-    try:
-        for batch in raw_batches(source, query, convert):
-            try:
-                cursor.executemany(statement, batch)
-                destination.commit()
-            except Exception:
-                destination.rollback()
-                raise
-            count += len(batch)
-    finally:
-        cursor.close()
+    last_id = 0
+    while True:
+        source.ping(reconnect=True, attempts=3, delay=2)
+        cursor = source.cursor()
+        try:
+            cursor.execute("SET time_zone = '+00:00'")
+            cursor.execute(page_query, (last_id, size))
+            names = [column[0] for column in cursor.description]
+            source_rows = cursor.fetchall()
+        finally:
+            cursor.close()
+        if not source_rows:
+            break
+        batch = [convert(dict(zip(names, row))) for row in source_rows]
+
+        destination.ping(reconnect=True, attempts=3, delay=2)
+        cursor = destination.cursor()
+        try:
+            cursor.execute("SET time_zone = '+00:00'")
+            cursor.executemany(statement, batch)
+            destination.commit()
+        except Exception:
+            destination.rollback()
+            raise
+        finally:
+            cursor.close()
+        count += len(batch)
+        last_id = source_rows[-1][names.index("id")]
+        if count % 10000 < len(batch):
+            print("Ruwe import: {} rijen verwerkt tot bron-ID {}".format(
+                count, last_id), flush=True)
     return count
 
 def upsert_statement(grain: str) -> str:
@@ -399,8 +427,8 @@ def main() -> int:
         dest_cursor = destination.cursor()
         dest_cursor.execute("SET time_zone = '+00:00'")
         dest_cursor.close()
-        p1_imported = import_raw(source, destination, RAW_P1, p1_values, INSERT_P1)
-        water_imported = import_raw(source, destination, RAW_WATER,
+        p1_imported = import_raw(source, destination, RAW_P1_PAGE, p1_values, INSERT_P1)
+        water_imported = import_raw(source, destination, RAW_WATER_PAGE,
                                     water_values, INSERT_WATER)
         dest_cursor = destination.cursor()
         for grain, buckets in (("month", months), ("day", days)):

@@ -442,8 +442,11 @@ eenheid van de **oude** PV-kolommen moet afzonderlijk worden bevestigd;
 `GOODWE_TOTAL_UNIT` beschrijft alleen de nieuwe cloudwaarden. De
 uitvoermodus vereist daarom expliciet `--pv-unit kWh` of `--pv-unit MWh`
 naast `--apply`. Gebruik die modus pas na een verse backup en een
-geslaagde proef op de brongegevens. De importer verwerkt ruwe rijen in
-kleine transacties en kan na onderbreking opnieuw worden gestart.
+geslaagde proef op de brongegevens. De importer leest ruwe rijen tijdens het
+schrijven in kleine pagina's op bron-ID en schrijft ze in kleine transacties.
+Een verbroken NAS-verbinding laat reeds bevestigde pagina's intact. Start
+na een onderbreking dezelfde opdracht opnieuw; reeds aanwezige bron-ID's
+worden veilig overgeslagen.
 De oude PV-rijen 1717 en 1718 hebben datums uit 2024 maar tellerstanden
 uit 2025. Hun juiste dagen zijn niet bewezen. De twee expliciete
 `--skip-pv-id` opties houden ze buiten de aggregatie, zodat de geldige
