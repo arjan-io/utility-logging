@@ -64,6 +64,21 @@ services:
     ports:
       - "127.0.0.1:${TARIFF_WEB_PORT:-8765}:8765"
 
+  nota-web:
+    <<: *common
+    profiles: ["nota"]
+    command: ["python", "-m", "nuts.nota_web"]
+    env_file: []
+    environment:
+      DB_HOST: ${DB_HOST}
+      DB_PORT: ${DB_PORT:-3306}
+      NOTA_DB_USER: ${NOTA_DB_USER:-}
+      NOTA_DB_PASSWORD: ${NOTA_DB_PASSWORD:-}
+    read_only: true
+    cap_drop: [ALL]
+    ports:
+      - "${NOTA_WEB_BIND_ADDRESS:-0.0.0.0}:${NOTA_WEB_PORT:-8766}:8766"
+
   costs:
     <<: *common
     profiles: ["costs"]

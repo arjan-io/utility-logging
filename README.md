@@ -24,6 +24,7 @@ zomer- en wintertijd de dagtotalen niet een uur verschuiven.
 | `maintenance` | Ruimt oude ruwe NAS-metingen in kleine porties op na de historische import. |
 | `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
 | `tariffs` | Beheert contracten, afrekenperioden, tariefregels en de verwachte nota via een lokale webpagina. |
+| `nota-web` | Toont alleen de verwachte nota via een apart webadres op de Pi. |
 | `costs` | Berekent geschatte dagkosten per onderdeel uit dagverbruik en actieve tarieven. |
 | `pv-probe` | Leest eenmalig een GoodWe SEMS+-station zonder data op te slaan. |
 | `pv` | Vraagt SEMS+ periodiek uit en bewaart de cumulatieve opbrengst in een eigen SQLite-buffer. |
@@ -430,7 +431,8 @@ regeling kun je verwerpen; het administratieve record blijft bewaard.
 
 ## Verwachte nota
 
-Open **Verwachte nota** bovenaan de tarievenpagina. De pagina leest de
+Open **Verwachte nota** bovenaan de tarievenpagina, of gebruik de aparte
+leesbare notapagina op het Pi-adres. Beide gebruiken dezelfde berekening. De pagina leest de
 bestaande stroom- en gascontracten, maand- en dagtotalen, tarieven en het
 voorschotschema. Zij schrijft niets in MariaDB. Het contractjaar begint op
 de ingangsdatum van het lopende stroomcontract: bij een start op 15 september
@@ -464,6 +466,34 @@ Controleer de berekening op de Pi zonder de pagina opnieuw te starten:
 cd /home/utility-logging
 docker compose run --rm --no-deps tariffs python -m nuts.nota --check
 ```
+
+### Apart bereikbaar via het Pi-adres
+
+Maak op de NAS eerst een aparte MariaDB-gebruiker met uitsluitend `SELECT`
+op de acht tabellen die de nota leest. De benodigde SQL wordt apart voor
+phpMyAdmin aangeleverd. Vul daarna `NOTA_DB_USER` en `NOTA_DB_PASSWORD` in
+de `.env` op de Pi. Deze container krijgt niet de MariaDB-schrijfgebruiker
+of het wachtwoord van het tarievenbeheer mee.
+
+Start de leesbare notapagina als aparte container:
+
+```sh
+cd /home/utility-logging
+docker compose --profile nota build nota-web
+docker compose --profile nota up -d nota-web
+docker compose ps nota-web tariffs
+```
+
+Open `http://<Pi-adres>:8766/nota` in de browser. Ook `/` en `/nota.php`
+op poort 8766 tonen dezelfde nota. De pagina haalt bij elk bezoek actuele
+gegevens op, maar biedt geen invoervelden of schrijfacties. De oude
+`http://<Pi-adres>/nota.php` op de bestaande webserver verandert hierdoor
+niet. De poort kan met `NOTA_WEB_PORT` in `.env` worden aangepast; met
+`NOTA_WEB_BIND_ADDRESS` kun je hem aan het LAN-adres van de Pi binden.
+Zonder die instelling is de nota op alle Pi-netwerkinterfaces bereikbaar.
+De nota bevat kosteninformatie en is op deze aparte poort zonder login
+leesbaar. Het tarievenbeheer blijft uitsluitend op `127.0.0.1:8765` van
+de Pi gebonden en behoudt zijn eigen wachtwoord en SSH-tunnel.
 
 ## Historische import voorbereiden
 

@@ -330,10 +330,11 @@ def euros(value):
     return "€ {:,.2f}".format(amount).replace(",", "_").replace(".", ",").replace("_", ".")
 
 
-def page(connection, today=None):
+def page(connection, today=None, navigation=None):
+    navigation = nav() if navigation is None else navigation
     result = report(connection, today)
     if result is None:
-        return document("Verwachte nota", nav() +
+        return document("Verwachte nota", navigation +
                         "<h1>Verwachte nota</h1><p>Er is geen lopend stroomcontract gevonden.</p>")
     esc = lambda value: html.escape(str(value), quote=True)
     balance = (result["scheduled_eur"] - result["expected_cost_eur"]
@@ -401,7 +402,7 @@ maandtotaal gelijk over de kalenderdagen verdeeld.</p><table><tr><th></th><th>Ma
 geraamde afname en teruglevering. Tarieven kunnen tijdens dit contractjaar
 wijzigen; een verbruiksafhankelijke terugleverband blijft afhankelijk van de
 uiteindelijke jaaropbrengst.</p></section>{warnings}""".format(
-        nav=nav(), start=esc(result["start"]),
+        nav=navigation, start=esc(result["start"]),
         last=esc(result["end"] - timedelta(days=1)),
         electricity=euros(result["electricity_eur"]),
         gas=euros(result["gas_eur"]), total=euros(result["expected_cost_eur"]),
