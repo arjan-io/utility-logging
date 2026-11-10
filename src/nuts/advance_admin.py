@@ -68,7 +68,7 @@ button{{background:#08736f;color:white;border:0;border-radius:6px;padding:.6rem 
 .muted{{background:#687b83}}table{{border-collapse:collapse;width:100%}}
 td,th{{border-bottom:1px solid #d9e1e5;padding:.6rem;text-align:left;vertical-align:top}}
 .scroll{{overflow-x:auto}}.hint{{color:#425863}}.notice{{background:#e7f4ec;padding:.8rem;border-radius:6px}}
-</style><main><nav><a href="/">← Tarieven</a></nav><h1>Voorschotten</h1>{notice}
+</style><main><nav><a href="/">← Tarieven</a> · <a href="/nota">Verwachte nota</a></nav><h1>Voorschotten</h1>{notice}
 <p class="hint">Dit zijn afgesproken periodieke bedragen, geen geregistreerde bankbetalingen.
 Eén gezamenlijk voorschot voor stroom en gas wordt één keer opgeslagen en aan beide contracten gekoppeld.
 Water kan alleen als apart voorschot worden ingevoerd.</p>

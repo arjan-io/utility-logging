@@ -23,7 +23,7 @@ zomer- en wintertijd de dagtotalen niet een uur verschuiven.
 | `aggregate` | Berekent gesloten dagen en maanden voor grafieken, met onbekende waarden bij meetgaten. |
 | `maintenance` | Ruimt oude ruwe NAS-metingen in kleine porties op na de historische import. |
 | `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
-| `tariffs` | Beheert contracten, afrekenperioden en tariefregels via een lokale webpagina. |
+| `tariffs` | Beheert contracten, afrekenperioden, tariefregels en de verwachte nota via een lokale webpagina. |
 | `costs` | Berekent geschatte dagkosten per onderdeel uit dagverbruik en actieve tarieven. |
 | `pv-probe` | Leest eenmalig een GoodWe SEMS+-station zonder data op te slaan. |
 | `pv` | Vraagt SEMS+ periodiek uit en bewaart de cumulatieve opbrengst in een eigen SQLite-buffer. |
@@ -41,9 +41,9 @@ Vul `MQTT_COMPAT_PREFIX` alleen wanneer je bewust tegelijk een tweede
 reeks onderwerpen wilt publiceren. Na een wijziging van deze instellingen
 moeten zowel `publisher` als `pv` opnieuw worden aangemaakt. De MQTT-kosten zijn
 **variabele afnamekosten**. De aparte dienst `costs` berekent dagregels
-voor vaste levering, belastingvermindering en netbeheer. Saldering en
-afrekening van verbruiksbanden vragen nog een afzonderlijke berekening;
-deze versie claimt daarvoor geen factuurbedrag.
+voor vaste levering, belastingvermindering en netbeheer. De pagina
+**Verwachte nota** gebruikt die rekenregels voor een schatting van het
+contractjaar, inclusief een geraamde verrekening van zonnepanelen.
 
 De dienst `publisher` maakt uit `nuts_v2` dezelfde JSON-berichten voor
 P1-stroom (`dsmr/electricity`), stroomkosten (`dsmr/kosten`), gasdebiet
@@ -409,8 +409,7 @@ blijven bestaan als de meter die dag niets registreert. Ontbrekend
 verbruik levert geen verzonnen variabele kosten op. Saldering en
 verbruiksafhankelijke terugleverkosten blijven schattingen tot de
 afrekening; regels met een onbekende afrekenband worden niet als nul
-geboekt. De oude `nota.php`-functie kan later worden opgebouwd uit
-maandverbruik en maandkosten.
+geboekt.
 
 ## Voorschotten
 
@@ -422,11 +421,44 @@ van het energietarief.
 
 Kies één stroom-, gas- of watercontract, of kies stroom en gas samen.
 Een gezamenlijk voorschot heeft één bedrag en twee contractkoppelingen;
-tel het in een toekomstig `nota`-overzicht maar één keer. Water kan alleen
+de verwachte nota telt het één keer. Water kan alleen
 apart worden gekoppeld. Vul het bedrag per maand of kwartaal, de
 ingangsdatum en de eerste betaaldatum in. Een nieuw bedrag voor dezelfde
 contracten sluit de vorige regeling op zijn ingangsdatum. Een foutieve
 regeling kun je verwerpen; het administratieve record blijft bewaard.
+
+## Verwachte nota
+
+Open **Verwachte nota** bovenaan de tarievenpagina. De pagina leest de
+bestaande stroom- en gascontracten, maand- en dagtotalen, tarieven en het
+voorschotschema. Zij schrijft niets in MariaDB. Het contractjaar begint op
+de ingangsdatum van het lopende stroomcontract: bij een start op 15 september
+loopt het overzicht tot en met 14 september van het volgende jaar.
+
+Afgesloten maanden gebruiken de bewaarde maandtotalen. Voor de huidige
+maand worden beschikbare gesloten dagen gebruikt. Ontbrekende en toekomstige
+dagen gebruiken het gemiddelde van maximaal vier eerdere overeenkomstige
+kalendermaanden. Bij een gedeeltelijke maand wordt het maandtotaal naar
+kalenderdagen verdeeld. De prognose telt stroom en gas samen, inclusief
+vaste kosten, belasting en netbeheer. Water valt erbuiten.
+
+Het ingevoerde voorschot is een **geplande** betaling; de pagina kan niet
+zien wat daadwerkelijk van de bankrekening is afgeschreven. Een gezamenlijk
+voorschot voor stroom en gas telt eenmaal mee. Het voorgestelde nieuwe
+bedrag is `(geraamde jaarkosten - reeds geplande voorschotten) /
+aantal resterende betalingen` en wordt op minimaal nul getoond. Bij een
+maandelijks voorschot is dit het voorgestelde bedrag per resterende maand.
+De raming van saldering en terugleverbanden kan van de uiteindelijke nota
+afwijken. Bij ontbrekende meetwaarden, verplichte tariefonderdelen of
+afrekenwijze wordt geen schijnbaar compleet jaarbedrag of nieuw voorschot
+getoond.
+
+Controleer de berekening op de Pi zonder de pagina opnieuw te starten:
+
+```sh
+cd /home/utility-logging
+docker compose run --rm --no-deps tariffs python -m nuts.nota --check
+```
 
 ## Historische import voorbereiden
 

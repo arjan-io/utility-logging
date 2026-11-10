@@ -13,7 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, quote, urlsplit
 from zoneinfo import ZoneInfo
 
-from . import advance_admin, advance_logic, tariff_logic as logic, tariff_overview, tariff_quick
+from . import advance_admin, advance_logic, nota, tariff_logic as logic, tariff_overview, tariff_quick
 
 
 TOKEN = secrets.token_urlsafe(32)
@@ -461,7 +461,7 @@ class Handler(BaseHTTPRequestHandler):
             return
         path = urlsplit(self.path).path
         if path not in ("/", "/stroom", "/gas", "/water", "/archief",
-                        "/setup", "/advances", "/new", "/withdraw"):
+                        "/setup", "/advances", "/nota", "/new", "/withdraw"):
             self.send_error(HTTPStatus.NOT_FOUND)
             return
         connection = None
@@ -490,6 +490,8 @@ class Handler(BaseHTTPRequestHandler):
                 rendered = page(connection, notice)
             elif path == "/advances":
                 rendered = advance_admin.page(connection, TOKEN, notice)
+            elif path == "/nota":
+                rendered = nota.page(connection)
             elif path == "/withdraw":
                 rendered = withdrawal_page(
                     connection, logic.positive_id(query.get("id", [""])[0], "Tariefregel"))

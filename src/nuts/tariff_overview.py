@@ -54,7 +54,7 @@ def document(title, body):
 
 
 def nav():
-    return '<nav><a href="/">Overzicht</a><a href="/stroom">Stroom</a><a href="/gas">Gas</a><a href="/water">Water</a><a href="/advances">Voorschotten</a></nav>'
+    return '<nav><a href="/">Overzicht</a><a href="/stroom">Stroom</a><a href="/gas">Gas</a><a href="/water">Water</a><a href="/advances">Voorschotten</a><a href="/nota">Verwachte nota</a></nav>'
 
 
 def home_page():
