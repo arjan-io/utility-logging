@@ -89,6 +89,7 @@ def run_forever() -> None:
                 "pv": "PV_OUTBOX_PATH"}[kind]
     path = os.getenv(path_key, "/var/lib/nuts/pv.sqlite") if kind == "pv" else os.environ[path_key]
     with Outbox(path, kind) as outbox:
+        last_prune = 0.0
         while True:
             try:
                 connection = mysql.connector.connect(**db_config)
@@ -97,6 +98,11 @@ def run_forever() -> None:
                     synced = sync_batch(outbox, sink)
                 finally:
                     connection.close()
+                if time.monotonic() - last_prune >= 3600:
+                    removed = outbox.prune_delivered()
+                    last_prune = time.monotonic()
+                    if removed:
+                        print("{}: {} bevestigde bufferregels opgeruimd".format(kind, removed), flush=True)
                 time.sleep(1 if synced else 5)
             except Exception as exc:
                 print("Synchronisatie wacht op NAS: {}".format(exc), flush=True)

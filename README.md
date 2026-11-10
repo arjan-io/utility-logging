@@ -21,6 +21,7 @@ zomer- en wintertijd de dagtotalen niet een uur verschuiven.
 | `p1-sync` | Stuurt alleen P1-events naar MariaDB en herhaalt veilig na een storing. |
 | `water-sync` | Stuurt alleen waterevents naar MariaDB en herhaalt veilig na een storing. |
 | `aggregate` | Berekent gesloten dagen en maanden voor grafieken, met onbekende waarden bij meetgaten. |
+| `maintenance` | Ruimt oude ruwe NAS-metingen in kleine porties op na de historische import. |
 | `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
 | `tariffs` | Beheert contracten, afrekenperioden en tariefregels via een lokale webpagina. |
 | `costs` | Berekent geschatte dagkosten per onderdeel uit dagverbruik en actieve tarieven. |
@@ -434,7 +435,48 @@ Daarom bewaart `daily_usage` de beschikbare oude dagen en
 Jaarcijfers worden uit `monthly_usage` opgeteld; er is geen aparte
 jaartabel nodig. Voor nieuwe data blijven de afzonderlijke P1-metingen,
 waterpulsen inclusief nulmetingen en PV-metingen in de ruwe tabellen
-beschikbaar. De huidige containers verwijderen die ruwe rijen niet.
+standaard 90 Nederlandse kalenderdagen beschikbaar. Wachtende SQLite-events
+blijven altijd staan. Bevestigde SQLite-events worden na zeven dagen in
+kleine porties opgeruimd; `water_counter` bewaart de lokale pulsteller.
+
+## Ruwe metingen opruimen
+
+De ruwe MariaDB-tabellen zijn veel groter dan de dag- en maandtabellen.
+`maintenance` verwijdert uitsluitend oude rijen uit `p1_reading`,
+`water_event` en `pv_reading`. `daily_usage` en `monthly_usage` blijven
+volledig bewaard, ook voor de historische grafieken. Alleen volledig
+afgelopen Nederlandse kalendermaanden met een opgeslagen maandtotaal
+voor het betreffende onderdeel komen in aanmerking. De bewaartermijn
+begint standaard 90 dagen terug. De bewaartermijn moet
+minstens 60 dagen zijn en langer dan `CALC_LOOKBACK_DAYS`, zodat de
+dagberekening nog op ruwe gegevens kan terugvallen. Het script verwijdert maximaal
+10.000 rijen per tabel en ronde, met 500 rijen per transactie.
+
+Start dit pas nadat de import en de dag- en maandtotalen zijn gecontroleerd.
+De standaardopdracht is alleen-lezen:
+
+```sh
+docker compose --profile maintenance run --rm --no-deps maintenance python -m nuts.retention
+```
+
+Voor een eenmalige, begrensde opruiming:
+
+```sh
+docker compose --profile maintenance run --rm --no-deps maintenance python -m nuts.retention --apply
+```
+
+Herhaal die opdracht zolang er oude rijen over zijn. Als de uitslag klopt,
+kan de achtergrondservice het daarna iedere 15 minuten voortzetten:
+
+```sh
+docker compose --profile maintenance up -d maintenance
+```
+
+Deze service heeft gerichte `DELETE`-rechten op de drie ruwe tabellen nodig;
+de SQL daarvoor wordt afzonderlijk voor phpMyAdmin aangeleverd. Een nieuwe
+`--apply` van de historische importer na het opruimen voegt de oude ruwe
+bronrijen opnieuw toe. De oude `nuts-*`-databases worden door deze service
+niet gewijzigd.
 
 De importer leest oude P1- en watermetingen, de bestaande dag- en
 maandtotalen en `nuts-pv.opbrengst`. Oude maanden blijven maandregels;

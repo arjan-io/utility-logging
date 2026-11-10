@@ -4,7 +4,7 @@ The NAS is never touched on the acquisition path. Each SQLite connection
 uses WAL and FULL synchronous mode; a committed event may be retried safely.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import sqlite3
 import threading
@@ -160,6 +160,24 @@ class Outbox:
             return self.connection.execute(
                 "SELECT COUNT(*) FROM {} WHERE delivered_at_utc IS NULL".format(self._table)
             ).fetchone()[0]
+
+    def prune_delivered(self, retention_days: int = 7, limit: int = 1000,
+                        now: Optional[datetime] = None) -> int:
+        """Remove old acknowledgements in small batches; pending events survive."""
+        if retention_days < 1 or limit < 1:
+            raise ValueError("Bewaartermijn en batchgrootte moeten positief zijn")
+        now = now or datetime.now(timezone.utc)
+        cutoff = utc_timestamp(now - timedelta(days=retention_days))
+        with self._lock:
+            with self.connection:
+                cursor = self.connection.execute(
+                    "DELETE FROM {0} WHERE event_id IN ("
+                    "SELECT event_id FROM {0} WHERE delivered_at_utc IS NOT NULL "
+                    "AND delivered_at_utc < ? ORDER BY delivered_at_utc LIMIT ?)".format(
+                        self._table),
+                    (cutoff, limit),
+                )
+                return cursor.rowcount
 
     def water_pulses_total(self) -> int:
         if self.kind != "water":

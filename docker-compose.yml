@@ -52,6 +52,11 @@ services:
     profiles: ["aggregate"]
     command: ["python", "-m", "nuts.aggregate"]
 
+  maintenance:
+    <<: *common
+    profiles: ["maintenance"]
+    command: ["python", "-m", "nuts.retention", "--run"]
+
   tariffs:
     <<: *common
     profiles: ["tariffs"]
