@@ -119,7 +119,8 @@ def mqtt_client():
     return client
 
 
-def process_reading(data, unit, timestamp, outbox, client, topic, cached_day=None):
+def process_reading(data, unit, timestamp, outbox, client, topic,
+                    cached_day=None, compat_topic=None):
     """Store cumulative energy if available; publish live power independently."""
     current_w = parse_power_w(data)
     day_kwh = parse_day_kwh(data)
@@ -136,9 +137,12 @@ def process_reading(data, unit, timestamp, outbox, client, topic, cached_day=Non
     try:
         if current_w is not None and client.is_connected():
             payload = pv_payload(current_w, day_kwh, timestamp, day_fresh)
-            result = client.publish(topic, json.dumps(payload), qos=1)
-            if result.rc != 0:
-                print("PV-MQTT wacht op broker: {}".format(result.rc), flush=True)
+            encoded = json.dumps(payload)
+            topics = (topic, compat_topic) if compat_topic and compat_topic != topic else (topic,)
+            for target in topics:
+                result = client.publish(target, encoded, qos=1)
+                if result.rc != 0:
+                    print("PV-MQTT wacht op broker: {}".format(result.rc), flush=True)
     except Exception as exc:
         print("PV-MQTT wacht: {}".format(type(exc).__name__), flush=True)
     return cached_day
@@ -160,6 +164,8 @@ def run_forever():
         skipload=True,
     )
     topic = os.getenv("MQTT_PREFIX", "sensors/v2").rstrip("/") + "/pv"
+    compat_prefix = os.getenv("MQTT_COMPAT_PREFIX", "").strip().rstrip("/")
+    compat_topic = compat_prefix + "/pv" if compat_prefix else None
     client = mqtt_client()
     local_tz = ZoneInfo(os.getenv("LOCAL_TIMEZONE", "Europe/Amsterdam"))
     cached_day = None
@@ -175,7 +181,7 @@ def run_forever():
                     cached_day = None
                     cached_date = today
                 cached_day = process_reading(data, unit, timestamp, outbox,
-                                             client, topic, cached_day)
+                                             client, topic, cached_day, compat_topic)
             except ValueError as exc:
                 print("PV-waarde onbruikbaar: {}".format(exc), flush=True)
             except Exception as exc:

@@ -51,6 +51,9 @@ scripts deze onderwerpen niet meer vullen. Bij een daggrens vóór de
 P1-omschakeling gebruikt de gasberekening de geïmporteerde P1-tijd als
 benadering voor de oude gasstand; nieuwe gasstanden gebruiken de eigen
 DSMR-gastijd.
+De PV-container leest dezelfde instelling en publiceert zijn bestaande
+`pv[0].pac` en `pv[0].eDag` ook op `sensors/pv`. Herstart zowel `publisher`
+als `pv` nadat je de instelling wijzigt.
 
 Het P1-bericht bevat naast `gebruik.hv` (netafname in W) en `gebruik.hl`
 (teruglevering in W) nu ook `gebruik.pvW` en `gebruik.huisW`.
