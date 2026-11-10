@@ -52,6 +52,22 @@ P1-omschakeling gebruikt de gasberekening de geïmporteerde P1-tijd als
 benadering voor de oude gasstand; nieuwe gasstanden gebruiken de eigen
 DSMR-gastijd.
 
+Het P1-bericht bevat naast `gebruik.hv` (netafname in W) en `gebruik.hl`
+(teruglevering in W) nu ook `gebruik.pvW` en `gebruik.huisW`.
+De laatste waarde is `max(0, pvW + hv - hl)`: rechtstreeks PV-verbruik in
+huis plus afname van het net. De laatst ontvangen PV-meting mag maximaal
+tien minuten oud zijn; de P1-meting maximaal twee minuten. Als PV te oud
+is, blijven beide nieuwe velden leeg (`null`); als alleen P1 te oud is,
+blijft `huisW` leeg.
+De PV-waarde komt uit SEMS+ en kan ongeveer twee minuten achterlopen.
+
+`water.rate` is het gemiddelde aantal liters per minuut over de laatste
+drie minuten. Na drie minuten zonder puls wordt het nul, mits een
+waterheartbeat in de laatste tien minuten bevestigt dat de lezer nog
+werkt. Zonder zo'n heartbeat wordt het `null`. Bij zeer langzame pulsen
+kan deze recente gemiddelde waarde afwisselend nul en positief zijn;
+het is geen meting van een continu stromend debiet.
+
 ## Voorbereiden op de Pi
 
 Gebruik de Docker Compose-plugin met een spatie: `docker compose`. Dit

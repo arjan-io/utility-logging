@@ -62,6 +62,13 @@ class MeterRepository:
             FROM p1_reading ORDER BY measured_at_utc DESC LIMIT 1
         """)
 
+    def latest_pv(self):
+        return self.one("""
+            SELECT measured_at_utc, current_w FROM pv_reading
+            WHERE current_w IS NOT NULL
+            ORDER BY measured_at_utc DESC LIMIT 1
+        """)
+
     def electric_at(self, moment):
         return self.one("""
             SELECT measured_at_utc, import_low_kwh, import_high_kwh,
@@ -93,10 +100,15 @@ class MeterRepository:
 
     def water_flow(self, now):
         row = self.one("""
-            SELECT COALESCE(SUM(liters), 0) AS liters
+            SELECT COALESCE(SUM(CASE WHEN measured_at_utc >= %s
+                                     THEN liters ELSE 0 END), 0) AS liters,
+                   MAX(measured_at_utc) AS latest_event
             FROM water_event WHERE measured_at_utc >= %s
               AND measured_at_utc < %s
-        """, (sql_time(now - timedelta(minutes=3)), sql_time(now)))
+        """, (sql_time(now - timedelta(minutes=3)),
+              sql_time(now - timedelta(minutes=10)), sql_time(now)))
+        if row["latest_event"] is None:
+            return None
         return float(Decimal(str(row["liters"])) / Decimal("3"))
 
     def gas_rate(self, now):
@@ -203,12 +215,33 @@ def water_volume(events, start, end, complete_day):
     return liters / Decimal("1000")
 
 
-def electricity_payload(row):
+def live_home_power(row, pv, now):
+    """Use the latest available PV sample alongside the current P1 power."""
+    if pv is None or pv["current_w"] is None:
+        return None, None
+    pv_age = now - aware(pv["measured_at_utc"])
+    if not timedelta(0) <= pv_age <= timedelta(minutes=10):
+        return None, None
+    pv_w = int(pv["current_w"])
+    if row is None:
+        return pv_w, None
+    p1_age = now - aware(row["measured_at_utc"])
+    if not timedelta(0) <= p1_age <= timedelta(minutes=2):
+        return pv_w, None
+    if row["import_w"] is None or row["export_w"] is None:
+        return pv_w, None
+    return pv_w, max(0, pv_w + int(row["import_w"]) - int(row["export_w"]))
+
+
+def electricity_payload(row, pv=None, now=None):
     if row is None:
         return None
+    now = now or datetime.now(timezone.utc)
+    pv_w, home_w = live_home_power(row, pv, now)
     number = lambda value: float(value) if value is not None else None
     return {
-        "gebruik": {"hv": row["import_w"], "hl": row["export_w"]},
+        "gebruik": {"hv": row["import_w"], "hl": row["export_w"],
+                    "pvW": pv_w, "huisW": home_w},
         "voltage": {"v1": number(row["voltage_l1_v"]),
                     "v2": number(row["voltage_l2_v"]),
                     "v3": number(row["voltage_l3_v"])},
@@ -273,7 +306,8 @@ def build_payloads(repo, now=None, topics=None):
                                 for period in periods]
     payloads = {}
     if "dsmr/electricity" in wanted:
-        payloads["dsmr/electricity"] = electricity_payload(repo.latest_p1())
+        payloads["dsmr/electricity"] = electricity_payload(
+            repo.latest_p1(), repo.latest_pv(), now)
     if "dsmr/kosten" in wanted:
         payloads["dsmr/kosten"] = {
             "kostenVandaag": costs["electricity"][0],
@@ -283,8 +317,9 @@ def build_payloads(repo, now=None, topics=None):
             "rate": repo.gas_rate(now), "costsToday": costs["gas"][0],
             "costsYesterday": costs["gas"][1]}
     if "water" in wanted:
+        flow = repo.water_flow(now)
         payloads["water"] = {
-            "rate": round(repo.water_flow(now), 2),
+            "rate": round(flow, 2) if flow is not None else None,
             "costsToday": costs["water"][0],
             "costsYesterday": costs["water"][1]}
     return payloads
