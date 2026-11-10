@@ -100,8 +100,8 @@ def parse_day_kwh(data):
 
 
 def pv_payload(current_w, day_kwh, timestamp, day_fresh):
-    """Keep the old GoodWe JSON paths while marking cached day values."""
-    return {"pv": [{"pac": current_w, "eDag": day_kwh}],
+    """Publish PV values directly, without a single-item array wrapper."""
+    return {"pac": current_w, "eDag": day_kwh,
             "measuredAtUtc": timestamp.replace(" ", "T") + "Z",
             "dayGenerationFresh": day_fresh}
 

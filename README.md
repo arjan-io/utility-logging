@@ -49,7 +49,7 @@ De dienst `publisher` maakt uit `nuts_v2` dezelfde JSON-berichten voor
 P1-stroom (`dsmr/electricity`), stroomkosten (`dsmr/kosten`), gasdebiet
 en gaskosten (`dsmr/gas`) en waterdebiet en waterkosten (`water`). De
 oude `usage.py` en het losse waterscript zijn daarvoor niet meer nodig.
-De PV-container publiceert `pv[0].pac` en `pv[0].eDag` op `sensors/pv`.
+De PV-container publiceert `pac` en `eDag` direct op `sensors/pv`.
 Bij een daggrens vóór de P1-omschakeling gebruikt de gasberekening de
 geïmporteerde P1-tijd als benadering voor de oude gasstand; nieuwe
 gasstanden gebruiken de eigen DSMR-gastijd.
@@ -254,8 +254,10 @@ probeert hij na het ingestelde interval opnieuw. Bij een NAS-storing blijft
 de PV-uitlezing in SQLite staan tot `pv-sync` deze kan afleveren.
 
 `pv` publiceert na iedere bruikbare SEMS+-uitlezing ook naar
-`sensors/pv` (of `<MQTT_PREFIX>/pv`). De velden `pv[0].pac` (watt) en
-`pv[0].eDag` (kWh) hebben hetzelfde JSON-pad als het oude GoodWe-script.
+`sensors/pv` (of `<MQTT_PREFIX>/pv`). De velden `pac` (watt) en
+`eDag` (kWh) staan direct in het JSON-bericht. De oude omhulling met een
+lijst `pv[0]` is verwijderd. Pas in openHAB eventuele JSONPATH-selecties
+aan van `$.pv[0].pac` naar `$.pac` en van `$.pv[0].eDag` naar `$.eDag`.
 `measuredAtUtc` is het ophaaltijdstip, niet de onbekende meettijd in de
 cloud. Als de dagteller tijdelijk ontbreekt, blijft de laatst ontvangen
 dagwaarde voor dezelfde lokale dag beschikbaar en wordt
