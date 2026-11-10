@@ -74,7 +74,10 @@ Eén gezamenlijk voorschot voor stroom en gas wordt één keer opgeslagen en aan
 Water kan alleen als apart voorschot worden ingevoerd.</p>
 <section><h2>Nieuw voorschot</h2><p class="hint">Kies stroom, gas, water of stroom én gas.
 Bij een wijziging met dezelfde contracten sluit het nieuwe voorschot het vorige op zijn ingangsdatum.
-De einddatum mag leeg blijven; een contracteinddatum begrenst het voorschot automatisch.</p>
+De ingangsdatum is de eerste contractmaand waarvoor dit bedrag geldt;
+de eerste betaaldatum mag later liggen. De laatste betaling kan daardoor
+na het contractjaar vallen. De einddatum mag leeg blijven; een
+contracteinddatum begrenst het voorschot automatisch.</p>
 <form method="post" action="/advance"><input type="hidden" name="csrf" value="{csrf}">
 <div class="grid">
 <div class="field"><label for="advance-electricity">Stroomcontract</label><select id="advance-electricity" name="electricity_contract_id">{electricity}</select></div>

@@ -44,21 +44,31 @@ def contract_year(contract_start, today):
 
 
 def scheduled_payments(schedules, start, end):
-    """Count a joined electricity/gas schedule once by its schedule ID."""
+    """Assign due dates to contract months, even when payment follows later.
+
+    A schedule starts with the first contract month beginning on or after
+    valid_from. Its first_due_on is the payment date for that month. This
+    allows twelve monthly instalments for a year whose first bill is late.
+    """
     payments = []
     for schedule in {row["id"]: row for row in schedules}.values():
         if schedule["status"] != "active":
             continue
         step = 1 if schedule["cadence"] == "monthly" else 3
-        anchor = schedule["first_due_on"]
-        index = 0
-        due = anchor
-        while due < end:
-            if due >= start and due >= schedule["valid_from"] and (
-                    schedule["valid_until"] is None or due < schedule["valid_until"]):
+        first_index = ((schedule["valid_from"].year - start.year) * 12
+                       + schedule["valid_from"].month - start.month)
+        if add_months(start, first_index) < schedule["valid_from"]:
+            first_index += 1
+        for index in range(12):
+            service_day = add_months(start, index)
+            if service_day >= end or service_day < schedule["valid_from"] or (
+                    schedule["valid_until"] is not None
+                    and service_day >= schedule["valid_until"]):
+                continue
+            elapsed = index - first_index
+            if elapsed >= 0 and elapsed % step == 0:
+                due = add_months(schedule["first_due_on"], elapsed)
                 payments.append((due, Decimal(str(schedule["amount_eur"]))))
-            index += step
-            due = add_months(anchor, index)
     return sorted(payments)
 
 
@@ -254,6 +264,10 @@ def summarize(start, end, today, monthly_rows, daily_rows, rules, policies, sche
         "gas_eur": None if "gas" in incomplete_commodities else totals["gas"],
         "expected_cost_eur": expected_cost, "salder_credit_eur": salder_credit,
         "export_kwh": exported, "scheduled_eur": due, "scheduled_past_eur": elapsed,
+        "scheduled_count": len(payments),
+        "scheduled_after_end_count": sum(1 for when, _ in payments if when >= end),
+        "scheduled_after_end_eur": sum((amount for when, amount in payments
+                                         if when >= end), ZERO),
         "remaining_count": len(remaining),
         "remaining_current_eur": sum((amount for _, amount in remaining), ZERO),
         "required_per_remaining_eur": adjusted,
@@ -334,6 +348,13 @@ def page(connection, today=None):
     warning_items = "".join("<li>{}</li>".format(esc(item)) for item in result["warnings"])
     warning_box = ("<section><h2>Onzekerheden</h2><ul>{}</ul></section>".format(warning_items)
                    if warning_items else "")
+    late_note = (
+        "<p class=\"hint\">{} termijn(en), samen {}, hebben een betaaldatum "
+        "na {}. Ze horen volgens het ingevoerde schema nog bij dit "
+        "contractjaar.</p>".format(result["scheduled_after_end_count"],
+                                   euros(result["scheduled_after_end_eur"]),
+                                   esc(result["end"] - timedelta(days=1)))
+        if result["scheduled_after_end_count"] else "")
     sources = result["origins"]
     def source_row(commodity, label):
         return ("<tr><th>{}</th><td>{}</td><td>{}</td><td>{}</td><td>{}</td></tr>"
@@ -357,9 +378,9 @@ inclusief vaste levering, belastingen en netbeheer. Water staat hier buiten.</p>
 <tr><th>Gas</th><td>{gas}</td></tr>
 <tr><th>Verwachte jaarkosten</th><td><strong>{total}</strong></td></tr>
 <tr><th>Waarvan geraamde saldering</th><td>− {salder}</td></tr>
-<tr><th>Geplande voorschotten</th><td>{scheduled}</td></tr>
+<tr><th>Geplande voorschotten ({scheduled_count} termijnen)</th><td>{scheduled}</td></tr>
 <tr><th>Verwacht saldo voorschot minus kosten</th><td><strong>{balance}</strong></td></tr>
-</table><p class="hint">Een positief saldo wijst op een mogelijk tegoed;
+</table>{late_note}<p class="hint">Een positief saldo wijst op een mogelijk tegoed;
 een negatief saldo op mogelijk bijbetalen. Voorschotten zijn hier
 <em>gepland</em>, niet als bankbetaling bevestigd.</p></section>
 <section><h2>Resterend voorschot</h2>
@@ -385,7 +406,9 @@ uiteindelijke jaaropbrengst.</p></section>{warnings}""".format(
         electricity=euros(result["electricity_eur"]),
         gas=euros(result["gas_eur"]), total=euros(result["expected_cost_eur"]),
         salder=euros(result["salder_credit_eur"]),
-        scheduled=euros(result["scheduled_eur"]), balance=euros(balance),
+        scheduled=euros(result["scheduled_eur"]),
+        scheduled_count=result["scheduled_count"], late_note=late_note,
+        balance=euros(balance),
         past=euros(result["scheduled_past_eur"]), count=remaining,
         future=euros(result["remaining_current_eur"]), suggestion=suggestion,
         electricity_sources=source_row("electricity", "Stroom"),

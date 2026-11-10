@@ -423,7 +423,8 @@ Kies één stroom-, gas- of watercontract, of kies stroom en gas samen.
 Een gezamenlijk voorschot heeft één bedrag en twee contractkoppelingen;
 de verwachte nota telt het één keer. Water kan alleen
 apart worden gekoppeld. Vul het bedrag per maand of kwartaal, de
-ingangsdatum en de eerste betaaldatum in. Een nieuw bedrag voor dezelfde
+ingangsdatum van de regeling en de **werkelijke eerste betaaldatum** in.
+Die betaaldatum mag later liggen dan de contractstart. Een nieuw bedrag voor dezelfde
 contracten sluit de vorige regeling op zijn ingangsdatum. Een foutieve
 regeling kun je verwerpen; het administratieve record blijft bewaard.
 
@@ -448,6 +449,10 @@ voorschot voor stroom en gas telt eenmaal mee. Het voorgestelde nieuwe
 bedrag is `(geraamde jaarkosten - reeds geplande voorschotten) /
 aantal resterende betalingen` en wordt op minimaal nul getoond. Bij een
 maandelijks voorschot is dit het voorgestelde bedrag per resterende maand.
+De termijnen worden toegerekend aan de contractmaanden vanaf de
+ingangsdatum van het voorschotschema. Als de leverancier pas later het eerste
+voorschot incasseert, kan de twaalfde betaaldatum na het einde van het
+contractjaar liggen. Die termijn telt wel mee en wordt apart vermeld.
 De raming van saldering en terugleverbanden kan van de uiteindelijke nota
 afwijken. Bij ontbrekende meetwaarden, verplichte tariefonderdelen of
 afrekenwijze wordt geen schijnbaar compleet jaarbedrag of nieuw voorschot
