@@ -81,8 +81,11 @@ def build_daily(day, p1_rows, water_rows, pv_rows):
 
     gas_samples = {}
     for row in p1_rows:
-        if row["gas_measured_at_utc"] is not None and row["gas_m3"] is not None:
-            stamp = aware(row["gas_measured_at_utc"])
+        gas_time = row["gas_measured_at_utc"]
+        if gas_time is None and row.get("source") == "legacy_import":
+            gas_time = row["measured_at_utc"]
+        if gas_time is not None and row["gas_m3"] is not None:
+            stamp = aware(gas_time)
             value = Decimal(str(row["gas_m3"]))
             if stamp in gas_samples and gas_samples[stamp] != value:
                 raise ValueError("Tegenstrijdige gasstanden op {}".format(stamp))
@@ -152,7 +155,7 @@ def day_inputs(connection, day):
     margin = timedelta(minutes=20)
     window = (sql_time(start - margin), sql_time(end + margin))
     p1 = rows(connection, """
-        SELECT measured_at_utc, import_low_kwh, import_high_kwh,
+        SELECT measured_at_utc, source, import_low_kwh, import_high_kwh,
                export_low_kwh, export_high_kwh, gas_m3, gas_measured_at_utc
         FROM p1_reading WHERE measured_at_utc >= %s AND measured_at_utc <= %s
         ORDER BY measured_at_utc
@@ -161,7 +164,8 @@ def day_inputs(connection, day):
         SELECT measured_at_utc, liters, source FROM water_event
         WHERE measured_at_utc >= %s AND measured_at_utc <= %s
         ORDER BY measured_at_utc
-    """, window)
+    """, (sql_time(start - timedelta(minutes=75)),
+          sql_time(end + timedelta(minutes=75))))
     pv = rows(connection, """
         SELECT measured_at_utc, generated_total_kwh FROM pv_reading
         WHERE measured_at_utc >= %s AND measured_at_utc <= %s
