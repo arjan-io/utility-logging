@@ -372,6 +372,8 @@ async function refresh() {
     const response = await fetch('/api/dashboard', {cache: 'no-store'});
     if (!response.ok) throw Error('Server tijdelijk niet beschikbaar');
     const data = await response.json();
+    document.querySelector('.nota-link').href =
+      `${location.protocol}//${location.hostname}:${data.nota_port}/nota`;
     makeCards(data);
     makeCharts(data);
     document.getElementById('updated').textContent = 'Bijgewerkt ' + localStamp(data.generated_at_utc);
@@ -386,7 +388,5 @@ document.querySelectorAll('.tabs button').forEach(button => button.addEventListe
   document.querySelectorAll('.tab-panel').forEach(panel =>
     panel.classList.toggle('active', panel.id === button.dataset.tab));
 }));
-document.querySelector('.nota-link').href =
-  `${location.protocol}//${location.hostname}:8766/nota`;
 document.getElementById('refresh').addEventListener('click', refresh);
 refresh();
