@@ -1,9 +1,17 @@
 /* Small self-contained SVG charts: columns for totals, a spline for five-year averages. */
 const COLORS = {
-  teal: '#006c73', blue: '#2854bd', gold: '#c77a00',
-  red: '#ba3842', green: '#187a40',
+  electricityLow: '#b77b4a', electricityHigh: '#69401f',
+  exportLow: '#c8745d', exportHigh: '#8c3d35',
+  gas: '#d5a900', water: '#246ec3', pv: '#19864a',
+  average: '#263238',
 };
-const YEAR_COLORS = ['#315d72', '#7853a6', '#007e79', '#c77a00', '#2854bd'];
+const YEAR_PALETTES = {
+  import_total_kwh: ['#c59670', '#ad7950', '#945e36', '#774722', '#5c3218'],
+  export_total_kwh: ['#dba08b', '#c7816b', '#ae624e', '#914633', '#702d25'],
+  gas_m3: ['#e9c63e', '#dfb71f', '#d5a900', '#bd9000', '#a77b00'],
+  water_m3: ['#82b7e8', '#5c9fdd', '#3f87cf', '#246ec3', '#15549c'],
+  pv_generated_kwh: ['#82c67c', '#5baf66', '#378f4a', '#19864a', '#0e5e31'],
+};
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const svgNode = (tag, attrs = {}) => {
   const node = document.createElementNS(SVG_NS, tag);
@@ -150,6 +158,7 @@ function chart(target, title, rows, series, options = {}) {
         });
         const digits = options.barDigits ?? (['kWh', 'liter'].includes(options.unit) ? 0 : 1);
         label.textContent = barValue(value, digits);
+        if (item.labelColor) label.setAttribute('style', `fill: ${item.labelColor}`);
         if (barWidth < 38) label.setAttribute('transform',
           `rotate(-90 ${labelX} ${labelY})`);
         svg.append(label);
@@ -228,7 +237,7 @@ function monthlyComparison(years, key, quality) {
   years.forEach((year, index) => {
     const field = 'year_' + year.year;
     series.push({key: field, quality: field + '_quality',
-      label: String(year.year), color: YEAR_COLORS[index]});
+      label: String(year.year), color: YEAR_PALETTES[key][index]});
     year.months.forEach((month, monthIndex) => {
       rows[monthIndex][field] = ['unknown', 'not_collected'].includes(month[quality])
         ? null : month[key];
@@ -240,7 +249,7 @@ function monthlyComparison(years, key, quality) {
     row.average = observed.length ?
       observed.reduce((sum, value) => sum + value, 0) / observed.length : null;
   });
-  series.push({key: 'average', label: 'Gemiddelde', color: COLORS.red, type: 'spline'});
+  series.push({key: 'average', label: 'Gemiddelde', color: COLORS.average, type: 'spline'});
   return {rows, series};
 }
 
@@ -264,22 +273,22 @@ function yearlyRows(years, keys, quality, currentMonth) {
 function makeCharts(data) {
   const days = data.days, months = data.months.slice(-13), years = data.years;
   const lowHigh = [
-    {key: 'import_low_kwh', quality: 'electricity_quality', label: 'Dal', color: COLORS.teal},
-    {key: 'import_high_kwh', quality: 'electricity_quality', label: 'Normaal', color: COLORS.blue},
+    {key: 'import_low_kwh', quality: 'electricity_quality', label: 'Dal', color: COLORS.electricityLow},
+    {key: 'import_high_kwh', quality: 'electricity_quality', label: 'Normaal', color: COLORS.electricityHigh},
   ];
   const exportLowHigh = [
-    {key: 'export_low_kwh', quality: 'electricity_quality', label: 'Dal', color: COLORS.gold},
-    {key: 'export_high_kwh', quality: 'electricity_quality', label: 'Normaal', color: COLORS.red},
+    {key: 'export_low_kwh', quality: 'electricity_quality', label: 'Dal', color: COLORS.exportLow},
+    {key: 'export_high_kwh', quality: 'electricity_quality', label: 'Normaal', color: COLORS.exportHigh},
   ];
   chart('overview-power', 'Netafname laatste 24 uur', data.recent.import_w,
-    [{key: 'value', label: 'Netafname', color: COLORS.teal}], {mode: 'line', time: true, unit: 'W', digits: 0});
+    [{key: 'value', label: 'Netafname', color: COLORS.electricityHigh}], {mode: 'line', time: true, unit: 'W', digits: 0});
   chart('overview-days', 'Stroomafname per dag', days, lowHigh,
     {mode: 'stacked', unit: 'kWh'});
   const definitions = [
     ['stroom-charts', 'Netafname', 'LAATSTE 24 UUR', 'power-import', data.recent.import_w,
-      [{key: 'value', label: 'Afname', color: COLORS.teal}], {mode: 'line', time: true, unit: 'W', digits: 0}],
+      [{key: 'value', label: 'Afname', color: COLORS.electricityHigh}], {mode: 'line', time: true, unit: 'W', digits: 0}],
     ['stroom-charts', 'Teruglevering', 'LAATSTE 24 UUR', 'power-export', data.recent.export_w,
-      [{key: 'value', label: 'Teruglevering', color: COLORS.gold}], {mode: 'line', time: true, unit: 'W', digits: 0}],
+      [{key: 'value', label: 'Teruglevering', color: COLORS.exportHigh}], {mode: 'line', time: true, unit: 'W', digits: 0}],
     ['stroom-charts', 'Stroomafname', 'LAATSTE 31 DAGEN', 'elec-days', days, lowHigh,
       {mode: 'stacked', unit: 'kWh'}],
     ['stroom-charts', 'Teruglevering', 'LAATSTE 31 DAGEN', 'export-days', days, exportLowHigh,
@@ -289,21 +298,21 @@ function makeCharts(data) {
     ['stroom-charts', 'Teruglevering', 'LAATSTE 13 VOLTOOIDE MAANDEN', 'export-months', months, exportLowHigh,
       {mode: 'stacked', month: true, unit: 'kWh'}],
     ['gas-charts', 'Gasverbruik', 'LAATSTE 31 DAGEN', 'gas-days', days,
-      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.red}], {mode: 'column', unit: 'm³'}],
+      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.gas, labelColor: '#302500'}], {mode: 'column', unit: 'm³'}],
     ['gas-charts', 'Gasverbruik', 'LAATSTE 13 VOLTOOIDE MAANDEN', 'gas-months', months,
-      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.red}], {mode: 'column', month: true, unit: 'm³', barDigits: 0}],
+      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.gas, labelColor: '#302500'}], {mode: 'column', month: true, unit: 'm³', barDigits: 0}],
     ['water-charts', 'Water per uur', 'LAATSTE 24 UUR', 'water-hours', data.recent.water_liters_per_hour,
-      [{key: 'value', label: 'Water', color: COLORS.green}], {mode: 'column', time: true, unit: 'liter', digits: 0}],
+      [{key: 'value', label: 'Water', color: COLORS.water}], {mode: 'column', time: true, unit: 'liter', digits: 0}],
     ['water-charts', 'Waterverbruik', 'LAATSTE 31 DAGEN', 'water-days', days,
-      [{key: 'water_m3', quality: 'water_quality', label: 'Water', color: COLORS.green}], {mode: 'column', unit: 'm³'}],
+      [{key: 'water_m3', quality: 'water_quality', label: 'Water', color: COLORS.water}], {mode: 'column', unit: 'm³'}],
     ['water-charts', 'Waterverbruik', 'LAATSTE 13 VOLTOOIDE MAANDEN', 'water-months', months,
-      [{key: 'water_m3', quality: 'water_quality', label: 'Water', color: COLORS.green}], {mode: 'column', month: true, unit: 'm³'}],
+      [{key: 'water_m3', quality: 'water_quality', label: 'Water', color: COLORS.water}], {mode: 'column', month: true, unit: 'm³'}],
     ['zon-charts', 'PV-vermogen', 'LAATSTE 24 UUR', 'pv-power', data.recent.pv_w,
-      [{key: 'value', label: 'PV', color: COLORS.blue}], {mode: 'line', time: true, unit: 'W', digits: 0}],
+      [{key: 'value', label: 'PV', color: COLORS.pv}], {mode: 'line', time: true, unit: 'W', digits: 0}],
     ['zon-charts', 'Opwek', 'LAATSTE 31 DAGEN', 'pv-days', days,
-      [{key: 'pv_generated_kwh', quality: 'pv_quality', label: 'PV', color: COLORS.blue}], {mode: 'column', unit: 'kWh'}],
+      [{key: 'pv_generated_kwh', quality: 'pv_quality', label: 'PV', color: COLORS.pv}], {mode: 'column', unit: 'kWh'}],
     ['zon-charts', 'Opwek', 'LAATSTE 13 VOLTOOIDE MAANDEN', 'pv-months', months,
-      [{key: 'pv_generated_kwh', quality: 'pv_quality', label: 'PV', color: COLORS.blue}], {mode: 'column', month: true, unit: 'kWh'}],
+      [{key: 'pv_generated_kwh', quality: 'pv_quality', label: 'PV', color: COLORS.pv}], {mode: 'column', month: true, unit: 'kWh'}],
   ];
   for (const container of ['stroom-charts', 'gas-charts', 'water-charts', 'zon-charts'])
     document.getElementById(container).replaceChildren();
@@ -317,11 +326,11 @@ function makeCharts(data) {
     ['stroom-charts', 'Teruglevering', ['export_low_kwh', 'export_high_kwh'],
       'electricity_quality', exportLowHigh, 'kWh', 'export_total_kwh'],
     ['gas-charts', 'Gas', ['gas_m3'], 'gas_quality',
-      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.red}], 'm³', 'gas_m3'],
+      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.gas, labelColor: '#302500'}], 'm³', 'gas_m3'],
     ['water-charts', 'Water', ['water_m3'], 'water_quality',
-      [{key: 'water_m3', quality: 'water_quality', label: 'Water', color: COLORS.green}], 'm³', 'water_m3'],
+      [{key: 'water_m3', quality: 'water_quality', label: 'Water', color: COLORS.water}], 'm³', 'water_m3'],
     ['zon-charts', 'Opwek', ['pv_generated_kwh'], 'pv_quality',
-      [{key: 'pv_generated_kwh', quality: 'pv_quality', label: 'PV', color: COLORS.blue}], 'kWh', 'pv_generated_kwh'],
+      [{key: 'pv_generated_kwh', quality: 'pv_quality', label: 'PV', color: COLORS.pv}], 'kWh', 'pv_generated_kwh'],
   ];
   annual.forEach(([container, title, keys, quality, annualSeries, unit, compareKey]) => {
     const id = 'annual-' + container + '-' + compareKey;
