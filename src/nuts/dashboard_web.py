@@ -47,6 +47,7 @@ class Handler(BaseHTTPRequestHandler):
                     result = snapshot(connection)
                 finally:
                     connection.close()
+                result["nota_port"] = int(os.getenv("NOTA_WEB_PORT", "8766"))
                 body = json.dumps(result, ensure_ascii=False, allow_nan=False).encode("utf-8")
                 self.respond(HTTPStatus.OK, body, "application/json; charset=utf-8")
             except Exception as exc:
