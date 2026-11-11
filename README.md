@@ -191,7 +191,13 @@ De P1-lezer bewaart standaard één geldig telegram per 30 seconden in SQLite
 en daarna in MariaDB. De meter mag elke seconde blijven zenden. Met
 `P1_CAPTURE_SECONDS` in `.env` kun je dit interval aanpassen. Een interval
 van 30 seconden houdt de metingen rond de Nederlandse daggrens ruim binnen
-de grens van twee minuten voor de dagberekening.
+de grens van tien minuten voor de dagberekening. Een meetverschil dat binnen
+die grens over middernacht valt, wordt over beide dagen verdeeld. Zo'n dag
+heeft de kwaliteit `complete`: de meterstanden zijn gemeten en de verdeling
+is nauwkeurig genoeg voor het dagoverzicht. Een groter gat rond middernacht
+maakt de betrokken dag `unknown`. Voor gas en PV geldt een grens van vijftien
+minuten vanwege hun tragere updates. Dagkosten blijven een raming tot de
+afrekening, ook wanneer het dagverbruik `complete` is.
 
 Voor de watermeter kies je in `.env` de GPIO-chip met de pinnen van de
 40-pins header. Op de Pi 4 is dat meestal `/dev/gpiochip0`; op de Pi 5
