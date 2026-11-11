@@ -57,11 +57,15 @@ function chart(target, title, rows, series, options = {}) {
   const plotWidth = width - left - right, plotHeight = height - top - bottom;
   const barSeries = series.filter(item => item.type !== 'spline' && options.mode !== 'line');
   const lineSeries = options.mode === 'line' ? series : series.filter(item => item.type === 'spline');
+  const visible = (row, item) => row[item.key] != null && Number.isFinite(row[item.key]) &&
+    (!item.quality || !['unknown', 'not_collected'].includes(row[item.quality]));
   const values = rows.map(row => options.mode === 'stacked'
-    ? barSeries.reduce((sum, item) => sum + (row[item.key] || 0), 0)
-    : Math.max(0, ...series.map(item => row[item.key] ?? 0)));
-  const hasValue = rows.some(row => series.some(item =>
-    row[item.key] != null && Number.isFinite(row[item.key])));
+    ? barSeries.every(item => visible(row, item))
+      ? barSeries.reduce((sum, item) => sum + row[item.key], 0) : 0
+    : Math.max(0, ...series.map(item => visible(row, item) ? row[item.key] : 0)));
+  const hasValue = rows.some(row => options.mode === 'stacked'
+    ? barSeries.every(item => visible(row, item))
+    : series.some(item => visible(row, item)));
   if (!hasValue) {
     const empty = document.createElement('p');
     empty.className = 'empty';
@@ -105,10 +109,11 @@ function chart(target, title, rows, series, options = {}) {
   const slotWidth = plotWidth / rows.length;
   const groupedWidth = Math.min(slotWidth * 0.8, 52);
   rows.forEach((row, index) => {
+    if (options.mode === 'stacked' && !barSeries.every(item => visible(row, item))) return;
     let stack = 0;
     barSeries.forEach((item, seriesIndex) => {
       const value = row[item.key];
-      if (value == null || !Number.isFinite(value)) return;
+      if (!visible(row, item)) return;
       const quality = item.quality ? row[item.quality] : null;
       const barWidth = options.mode === 'stacked'
         ? groupedWidth
@@ -143,7 +148,7 @@ function chart(target, title, rows, series, options = {}) {
     };
     rows.forEach((row, index) => {
       const value = row[item.key];
-      if (value == null || !Number.isFinite(value)) {
+      if (!visible(row, item)) {
         finish();
         return;
       }
@@ -203,7 +208,8 @@ function monthlyComparison(years, key, quality) {
     series.push({key: field, quality: field + '_quality',
       label: String(year.year), color: YEAR_COLORS[index]});
     year.months.forEach((month, monthIndex) => {
-      rows[monthIndex][field] = month[key];
+      rows[monthIndex][field] = ['unknown', 'not_collected'].includes(month[quality])
+        ? null : month[key];
       rows[monthIndex][field + '_quality'] = month[quality];
     });
   });
@@ -222,7 +228,8 @@ function yearlyRows(years, keys, quality, currentMonth) {
     for (const key of keys) {
       const required = year.year === Number(currentMonth.slice(0, 4))
         ? year.months.slice(0, Number(currentMonth.slice(5, 7)) - 1) : year.months;
-      row[key] = required.length && required.every(month => month[key] != null)
+      row[key] = required.length && required.every(month => month[key] != null &&
+        !['unknown', 'not_collected'].includes(month[quality]))
         ? required.reduce((sum, month) => sum + month[key], 0) : null;
     }
     row[quality] = year.year !== Number(currentMonth.slice(0, 4)) &&
