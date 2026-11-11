@@ -144,7 +144,7 @@ function chart(target, title, rows, series, options = {}) {
         class: `chart-bar ${quality === 'estimated' ? 'estimated' : ''}`,
       });
       const tooltip = svgNode('title');
-      tooltip.textContent = `${labelAt(index)} · ${item.label}: ${valueText(value, 3)} ${options.unit || ''}${quality === 'estimated' ? ' · schatting' : ''}`;
+      tooltip.textContent = `${labelAt(index)} · ${item.label}: ${valueText(value, 3)} ${options.unit || ''}${quality === 'estimated' ? ' · benaderde waarde' : ''}`;
       rect.append(tooltip);
       svg.append(rect);
       if (options.showBarValues !== false && value > 0 &&
@@ -399,7 +399,7 @@ function makeCards(data) {
       total.textContent = euro(cost.total_eur);
       const note = document.createElement('small');
       const estimate = cost.status === 'estimate' || yesterday[key + '_quality'] === 'estimated'
-        ? 'Schatting · ' : '';
+        ? 'Kostenraming · ' : '';
       note.textContent = key === 'water'
         ? estimate + (fixed == null ? 'geen vastrechtregel' : 'waarvan vastrecht ' + euro(fixed))
         : network == null
