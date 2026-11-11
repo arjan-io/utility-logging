@@ -89,6 +89,7 @@ services:
       DB_PORT: ${DB_PORT:-3306}
       NOTA_DB_USER: ${NOTA_DB_USER:-}
       NOTA_DB_PASSWORD: ${NOTA_DB_PASSWORD:-}
+      NOTA_WEB_PORT: ${NOTA_WEB_PORT:-8766}
     read_only: true
     cap_drop: [ALL]
     ports:
