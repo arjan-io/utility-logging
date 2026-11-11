@@ -72,20 +72,20 @@ def slots(rows, first, last, key, step):
     return result
 
 
-def quarter_hour(moment):
-    return moment.replace(minute=(moment.minute // 15) * 15, second=0, microsecond=0)
+def power_bucket(moment):
+    return moment.replace(minute=(moment.minute // 5) * 5, second=0, microsecond=0)
 
 
 def recent_power(rows, field, start, now):
     buckets = {}
     for row in rows:
-        buckets[quarter_hour(row["measured_at_utc"])] = row
+        buckets[power_bucket(row["measured_at_utc"])] = row
     result = []
-    moment = quarter_hour(start)
+    moment = power_bucket(start)
     while moment <= now:
         row = buckets.get(moment)
         result.append({"time_utc": utc_iso(moment), "value": number(row[field]) if row else None})
-        moment += timedelta(minutes=15)
+        moment += timedelta(minutes=5)
     return result
 
 
