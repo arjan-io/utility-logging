@@ -369,19 +369,28 @@ function makeCards(data) {
     name.textContent = label;
     const amount = document.createElement('strong');
     const cost = costs[key];
-    amount.textContent = cost ? euro(cost.total_eur) : 'Onbekend';
-    if (cost) {
+    if (!cost) {
+      amount.textContent = 'Onbekend';
+    } else {
+      const network = cost.components.network;
+      const fixed = cost.components.fixed_supply;
+      const totalLabel = document.createElement('small');
+      totalLabel.className = 'cost-total-label';
+      totalLabel.textContent = key === 'water'
+        ? fixed == null ? 'Totaal' : 'Totaal inclusief vastrecht'
+        : network == null ? 'Totaal zonder netbeheer' : 'Totaal inclusief netbeheer';
+      const total = document.createElement('span');
+      total.textContent = euro(cost.total_eur);
       const note = document.createElement('small');
       const estimate = cost.status === 'estimate' || yesterday[key + '_quality'] === 'estimated'
         ? 'Schatting · ' : '';
-      const network = cost.components.network;
       note.textContent = key === 'water'
-        ? estimate + 'totaal inclusief vastrecht'
+        ? estimate + (fixed == null ? 'geen vastrechtregel' : 'waarvan vastrecht ' + euro(fixed))
         : network == null
           ? estimate + 'netbeheer ontbreekt in de kostenregels'
-          : estimate + 'incl. netbeheer ' + euro(network) +
-            ' · zonder netbeheer ' + euro(cost.excluding_network_eur);
-      amount.append(note);
+          : estimate + 'netbeheer ' + euro(network) +
+            ' · overige kosten ' + euro(cost.excluding_network_eur);
+      amount.append(totalLabel, total, note);
     }
     row.append(name, amount);
     list.append(row);
