@@ -1,9 +1,9 @@
 /* Small self-contained SVG charts: columns for totals, a spline for five-year averages. */
 const COLORS = {
-  teal: '#167d77', blue: '#527bd0', gold: '#d99b38',
-  red: '#d66d5c', green: '#449b70',
+  teal: '#006c73', blue: '#2854bd', gold: '#c77a00',
+  red: '#ba3842', green: '#187a40',
 };
-const YEAR_COLORS = ['#9cb6b0', '#6c9e9b', '#167d77', '#d99b38', '#527bd0'];
+const YEAR_COLORS = ['#315d72', '#7853a6', '#007e79', '#c77a00', '#2854bd'];
 const SVG_NS = 'http://www.w3.org/2000/svg';
 const svgNode = (tag, attrs = {}) => {
   const node = document.createElementNS(SVG_NS, tag);
@@ -14,6 +14,9 @@ const euro = value => value == null ? '—' :
   new Intl.NumberFormat('nl-NL', {style: 'currency', currency: 'EUR'}).format(value);
 const valueText = (value, digits = 1) => value == null ? '—' :
   new Intl.NumberFormat('nl-NL', {maximumFractionDigits: digits}).format(value);
+const barValue = value => new Intl.NumberFormat('nl-NL', {
+  minimumFractionDigits: 1, maximumFractionDigits: 1,
+}).format(value);
 const localStamp = value => value ?
   new Date(value).toLocaleString('nl-NL', {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -132,6 +135,19 @@ function chart(target, title, rows, series, options = {}) {
       tooltip.textContent = `${labelAt(index)} · ${item.label}: ${valueText(value, 3)} ${options.unit || ''}${quality === 'estimated' ? ' · schatting' : ''}`;
       rect.append(tooltip);
       svg.append(rect);
+      if (value > 0 && barHeight >= (barWidth < 38 ? 34 : 18)) {
+        const labelX = barX + barWidth / 2;
+        const labelY = barTop + barHeight / 2;
+        const label = svgNode('text', {
+          x: labelX, y: labelY,
+          'text-anchor': 'middle', 'dominant-baseline': 'middle',
+          class: 'bar-value',
+        });
+        label.textContent = value < 0.05 ? '<0,1' : barValue(value);
+        if (barWidth < 38) label.setAttribute('transform',
+          `rotate(-90 ${labelX} ${labelY})`);
+        svg.append(label);
+      }
       if (options.mode === 'stacked') stack += value;
     });
   });
@@ -356,8 +372,15 @@ function makeCards(data) {
     amount.textContent = cost ? euro(cost.total_eur) : 'Onbekend';
     if (cost) {
       const note = document.createElement('small');
-      note.textContent = (cost.status === 'estimate' || yesterday[key + '_quality'] === 'estimated'
-        ? 'Schatting · ' : '') + 'excl. netbeheer ' + euro(cost.excluding_network_eur);
+      const estimate = cost.status === 'estimate' || yesterday[key + '_quality'] === 'estimated'
+        ? 'Schatting · ' : '';
+      const network = cost.components.network;
+      note.textContent = key === 'water'
+        ? estimate + 'totaal inclusief vastrecht'
+        : network == null
+          ? estimate + 'netbeheer ontbreekt in de kostenregels'
+          : estimate + 'incl. netbeheer ' + euro(network) +
+            ' · zonder netbeheer ' + euro(cost.excluding_network_eur);
       amount.append(note);
     }
     row.append(name, amount);
