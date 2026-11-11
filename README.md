@@ -25,6 +25,7 @@ zomer- en wintertijd de dagtotalen niet een uur verschuiven.
 | `publisher` | Publiceert actueel vermogen, waterdebiet en variabele kosten naar MQTT. |
 | `tariffs` | Beheert contracten, afrekenperioden, tariefregels en de verwachte nota via een lokale webpagina. |
 | `nota-web` | Toont alleen de verwachte nota via een apart webadres op de Pi. |
+| `dashboard` | Toont de nieuwe grafiekenpagina via een apart webadres op de Pi; leest MariaDB alleen. |
 | `costs` | Berekent geschatte dagkosten per onderdeel uit dagverbruik en actieve tarieven. |
 | `pv-probe` | Leest eenmalig een GoodWe SEMS+-station zonder data op te slaan. |
 | `pv` | Vraagt SEMS+ periodiek uit en bewaart de cumulatieve opbrengst in een eigen SQLite-buffer. |
@@ -63,6 +64,33 @@ tien minuten oud zijn; de P1-meting maximaal twee minuten. Als PV te oud
 is, blijven beide nieuwe velden leeg (`null`); als alleen P1 te oud is,
 blijft `huisW` leeg.
 De PV-waarde komt uit SEMS+ en kan ongeveer twee minuten achterlopen.
+
+## Grafiekenpagina
+
+De nieuwe grafiekenpagina draait los van tarievenbeheer op poort `8767` en
+gebruikt het alleen-lezen account `NOTA_DB_USER`. Ze toont actueel vermogen,
+geschatte kosten van de laatste gesloten dag, 24 uur aan vermogensmetingen,
+31 gesloten dagen, 13 voltooide maanden en een vergelijking van vijf
+kalenderjaren. Wateruren zonder ontvangen event, onbekende dagen en maanden
+blijven leeg in plaats van als nul te verschijnen. De actuele huiswaarde
+volgt dezelfde formule als MQTT: PV + netafname − teruglevering.
+
+Het leesaccount heeft naast de bestaande notatabellen `SELECT` nodig op
+`p1_reading`, `water_event`, `pv_reading` en `daily_cost_line`. Voer die
+rechten zelf op de NAS in via phpMyAdmin; de SQL staat bewust niet in deze
+repository. Start daarna op de Pi:
+
+```sh
+cd /home/utility-logging
+docker compose --profile dashboard build dashboard
+docker compose --profile dashboard up -d dashboard
+curl -f http://127.0.0.1:8767/api/dashboard >/dev/null
+```
+
+Open de pagina op `http://<Pi-adres>:8767/`. `DASHBOARD_WEB_BIND_ADDRESS`
+en `DASHBOARD_WEB_PORT` in `.env` bepalen het adres en de poort op de Pi.
+De notapagina op poort `8766` en het afgeschermde tarievenbeheer op
+poort `8765` blijven aparte diensten.
 
 `water.rate` is het gemiddelde aantal liters per minuut over de laatste
 drie minuten. Na drie minuten zonder puls wordt het nul, mits een
