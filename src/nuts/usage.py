@@ -28,13 +28,14 @@ def _seconds(span: timedelta) -> Decimal:
 
 def cumulative_daily(
     samples: Iterable[Tuple[datetime, object]], first: date, last: date,
-    max_boundary_gap_seconds: int = 120,
+    max_boundary_gap_seconds: int = 600,
 ) -> Mapping[date, Tuple[Optional[Decimal], str]]:
     """Distribute meter deltas only when their day is identifiable.
 
-    A short interval crossing local midnight is interpolated and marked
-    estimated. A long interval crossing midnight makes its affected days
-    unknown; its whole delta is never assigned to the restart day.
+    A short interval crossing local midnight is split between both days.
+    Within the accepted boundary gap this counts as complete coverage.
+    A longer interval makes its affected days unknown; its whole delta is
+    never assigned to the restart day.
     """
     if first > last:
         raise ValueError("Ongeldig datumbereik")
@@ -42,7 +43,6 @@ def cumulative_daily(
     if any(moment.tzinfo is None for moment, _ in readings):
         raise ValueError("Meetmoment moet tijdzone bevatten")
     totals = {day: ZERO for day in days(first, last)}
-    estimated = set()
     unknown = set()
     for (start, old), (end, new) in zip(readings, readings[1:]):
         if end <= start:
@@ -66,8 +66,6 @@ def cumulative_daily(
             if day not in totals:
                 continue
             totals[day] += delta * _seconds(piece_end - piece_start) / duration
-            if crosses_inside:
-                estimated.add(day)
     result = {}
     for day in totals:
         # A full day needs a measurement on each side of both boundaries.
@@ -77,8 +75,7 @@ def cumulative_daily(
         if not covered or day in unknown:
             result[day] = (None, "unknown")
         else:
-            quality = "estimated" if day in estimated else "complete"
-            result[day] = (totals[day].quantize(Decimal("0.001")), quality)
+            result[day] = (totals[day].quantize(Decimal("0.001")), "complete")
     return result
 
 
