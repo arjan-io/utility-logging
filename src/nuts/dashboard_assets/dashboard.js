@@ -14,9 +14,13 @@ const euro = value => value == null ? '—' :
   new Intl.NumberFormat('nl-NL', {style: 'currency', currency: 'EUR'}).format(value);
 const valueText = (value, digits = 1) => value == null ? '—' :
   new Intl.NumberFormat('nl-NL', {maximumFractionDigits: digits}).format(value);
-const barValue = value => new Intl.NumberFormat('nl-NL', {
-  minimumFractionDigits: 1, maximumFractionDigits: 1,
-}).format(value);
+const barValue = (value, digits) => {
+  if (value > 0 && value < (digits === 0 ? 0.5 : 0.05))
+    return digits === 0 ? '<1' : '<0,1';
+  return new Intl.NumberFormat('nl-NL', {
+    minimumFractionDigits: digits, maximumFractionDigits: digits,
+  }).format(value);
+};
 const localStamp = value => value ?
   new Date(value).toLocaleString('nl-NL', {
     day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
@@ -135,7 +139,8 @@ function chart(target, title, rows, series, options = {}) {
       tooltip.textContent = `${labelAt(index)} · ${item.label}: ${valueText(value, 3)} ${options.unit || ''}${quality === 'estimated' ? ' · schatting' : ''}`;
       rect.append(tooltip);
       svg.append(rect);
-      if (value > 0 && barHeight >= (barWidth < 38 ? 34 : 18)) {
+      if (options.showBarValues !== false && value > 0 &&
+          barHeight >= (barWidth < 38 ? 34 : 18)) {
         const labelX = barX + barWidth / 2;
         const labelY = barTop + barHeight / 2;
         const label = svgNode('text', {
@@ -143,7 +148,8 @@ function chart(target, title, rows, series, options = {}) {
           'text-anchor': 'middle', 'dominant-baseline': 'middle',
           class: 'bar-value',
         });
-        label.textContent = value < 0.05 ? '<0,1' : barValue(value);
+        const digits = options.barDigits ?? (['kWh', 'liter'].includes(options.unit) ? 0 : 1);
+        label.textContent = barValue(value, digits);
         if (barWidth < 38) label.setAttribute('transform',
           `rotate(-90 ${labelX} ${labelY})`);
         svg.append(label);
@@ -285,7 +291,7 @@ function makeCharts(data) {
     ['gas-charts', 'Gasverbruik', 'LAATSTE 31 DAGEN', 'gas-days', days,
       [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.red}], {mode: 'column', unit: 'm³'}],
     ['gas-charts', 'Gasverbruik', 'LAATSTE 13 VOLTOOIDE MAANDEN', 'gas-months', months,
-      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.red}], {mode: 'column', month: true, unit: 'm³'}],
+      [{key: 'gas_m3', quality: 'gas_quality', label: 'Gas', color: COLORS.red}], {mode: 'column', month: true, unit: 'm³', barDigits: 0}],
     ['water-charts', 'Water per uur', 'LAATSTE 24 UUR', 'water-hours', data.recent.water_liters_per_hour,
       [{key: 'value', label: 'Water', color: COLORS.green}], {mode: 'column', time: true, unit: 'liter', digits: 0}],
     ['water-charts', 'Waterverbruik', 'LAATSTE 31 DAGEN', 'water-days', days,
@@ -321,13 +327,14 @@ function makeCharts(data) {
     const id = 'annual-' + container + '-' + compareKey;
     panel(container, title + ' per jaar', 'VIJF KALENDERJAREN · LOPEND JAAR T/M VORIGE MAAND', id);
     chart(id, title + ' per jaar', yearlyRows(years, keys, quality, data.today.slice(0, 7)),
-      annualSeries, {mode: keys.length > 1 ? 'stacked' : 'column', year: true, unit});
+      annualSeries, {mode: keys.length > 1 ? 'stacked' : 'column', year: true, unit,
+        barDigits: container === 'gas-charts' ? 0 : undefined});
     const comparison = monthlyComparison(years, compareKey, quality);
     const comparisonId = 'compare-' + container + '-' + compareKey;
     panel(container, title + ' per kalendermaand', 'VIJF JAAR · STAVEN EN GEMIDDELDE LIJN',
       comparisonId, true);
     chart(comparisonId, title + ' per kalendermaand', comparison.rows,
-      comparison.series, {mode: 'compare', compare: true, unit});
+      comparison.series, {mode: 'compare', compare: true, unit, showBarValues: false});
   });
 }
 
