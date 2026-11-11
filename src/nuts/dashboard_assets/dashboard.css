@@ -8,3 +8,4 @@
 .cost-row strong{max-width:65%;text-align:right;line-height:1.25}
 .cost-row small{margin-top:5px;line-height:1.3}
 :root{--teal:#006c73;--blue:#2854bd;--gold:#c77a00;--red:#ba3842;--green:#187a40}
+.cost-row .cost-total-label{margin:0 0 4px;color:var(--ink);font-weight:600}
