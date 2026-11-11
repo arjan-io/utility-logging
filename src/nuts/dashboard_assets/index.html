@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="nl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Verbruik · Thuis</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <script defer src="/dashboard.js"></script>
+</head>
+<body>
+  <header class="masthead">
+    <div class="brand"><span class="brand-mark">◒</span><div><strong>Verbruik</strong><small>Stroom · gas · water · zon</small></div></div>
+    <div class="header-actions"><span id="updated">Gegevens laden…</span><button id="refresh" type="button">Vernieuwen</button></div>
+  </header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">MIJN HUIS</p><h1>Inzicht in je verbruik</h1><p>Actuele metingen en de bewaarde historie op één plek.</p></div><a class="nota-link" href="http://192.168.10.25:8766/nota">Bekijk verwachte nota ↗</a></div>
+    <nav class="tabs" aria-label="Onderdelen"><button class="active" data-tab="overzicht">Overzicht</button><button data-tab="stroom">Stroom</button><button data-tab="gas">Gas</button><button data-tab="water">Water</button><button data-tab="zon">Zon</button></nav>
+    <div id="message" role="status"></div>
+    <section id="overzicht" class="tab-panel active" aria-label="Overzicht">
+      <div class="cards" id="live-cards"></div>
+      <div class="two-col"><article class="panel"><div class="panel-heading"><div><p class="eyebrow">LAATSTE 24 UUR</p><h2>Vermogen</h2></div><span class="unit">Watt</span></div><div id="overview-power" class="chart"></div></article><article class="panel"><div class="panel-heading"><div><p class="eyebrow">GISTEREN</p><h2>Kosten per onderdeel</h2></div><span class="unit">inclusief netbeheer</span></div><div id="cost-cards" class="cost-list"></div></article></div>
+      <article class="panel"><div class="panel-heading"><div><p class="eyebrow">LAATSTE 31 DAGEN</p><h2>Verbruik per dag</h2></div></div><div id="overview-days" class="chart"></div></article>
+    </section>
+    <section id="stroom" class="tab-panel" aria-label="Stroom"><div class="section-head"><h2>Stroom</h2><p>Afname en teruglevering, gescheiden naar normaal en dal.</p></div><div id="stroom-charts" class="chart-grid"></div></section>
+    <section id="gas" class="tab-panel" aria-label="Gas"><div class="section-head"><h2>Gas</h2><p>Verbruik uit de cumulatieve gasmeterstand.</p></div><div id="gas-charts" class="chart-grid"></div></section>
+    <section id="water" class="tab-panel" aria-label="Water"><div class="section-head"><h2>Water</h2><p>1 puls = 1 liter. Uren zonder ontvangen event blijven leeg.</p></div><div id="water-charts" class="chart-grid"></div></section>
+    <section id="zon" class="tab-panel" aria-label="Zon"><div class="section-head"><h2>Zonnepanelen</h2><p>Vermogen en opwek volgens GoodWe SEMS+.</p></div><div id="zon-charts" class="chart-grid"></div></section>
+    <p class="footnote">Schattingen zijn gearceerd. Ontbrekende gegevens blijven leeg. Dag en maand volgen de Nederlandse kalender; meettijdstippen zijn opgeslagen in UTC.</p>
+  </main>
+</body>
+</html>
