@@ -3,6 +3,7 @@
 @media(max-width:900px){.cards{grid-template-columns:repeat(2,1fr)}.two-col,.chart-grid{grid-template-columns:1fr}.chart-grid .wide{grid-column:auto}}
 @media(max-width:600px){.masthead{padding:0 16px}.header-actions{gap:7px}.header-actions #updated{display:none}main{padding:27px 15px 45px}.intro{display:block}.nota-link{display:inline-block;margin-top:19px}.cards{gap:10px}.card{padding:16px}.card .value{font-size:25px}.panel{padding:17px}.tabs button{padding:11px 13px}}
 @media(min-width:901px){.cards{grid-template-columns:repeat(5,minmax(0,1fr))}}
+@media(min-width:901px){.card .value.gas-reading{font-size:clamp(18px,2.1vw,30px);white-space:nowrap}}
 .chart .bar-value{fill:#fff;font-size:11px;font-weight:800;paint-order:stroke;stroke:#17303966;stroke-width:1px;pointer-events:none}
 .chart-bar.estimated{opacity:.82}
 .cost-row strong{max-width:65%;text-align:right;line-height:1.25}
