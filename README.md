@@ -654,17 +654,77 @@ nulopbrengst. Voor een complete PV-dag zijn meetpunten rond beide
 middernachtgrenzen nodig. Start de doorlopende `aggregate`-dienst pas
 nadat de berekening en de historische gegevens zijn vergeleken.
 
-## Huidige testgrens
+## Huidige status
 
-De Python-logica is lokaal met gesimuleerde telegrammen, pulsen en
-NAS-uitval getest. Een P1- en waterinsert met rollback en de weg van
-tijdelijke SQLite-records naar MariaDB met rollback zijn vanuit een
-container op de 32-bit Pi bevestigd. Beide synchronisatiecontainers
-draaien. PV wordt live naar MariaDB gestuurd; de recente rijen kwamen
-meestal ongeveer iedere minuut binnen. De nieuwe PV-MQTT-publicatie,
-historische importer en dagaggregatie zijn nog niet op echte gegevens
-gecontroleerd. GPIO-toegang en de P1-poort worden pas bij de overdracht
-aan de nieuwe lezers getest.
+De P1-, water- en PV-collectors, hun SQLite-buffers en synchronisatie naar
+MariaDB draaien op de 32-bit Pi. De historische import is uitgevoerd en
+de dagaggregatie en kostenregels zijn op echte gegevens gecontroleerd.
+Voor 11 november 2026 kwamen de opgeslagen dagwaarden overeen met de
+proefberekening en hadden alle vier de meetsoorten kwaliteit `complete`.
+De MQTT-berichten, grafiekenpagina en notapagina zijn in gebruik. Een
+aparte backup van `nuts_v2` blijft nodig; NAS-pariteit is geen backup.
 
 Er staan geen wachtwoorden, database-exports of persoonlijke
 migratienotities in deze repository.
+
+## Gegevensstroom
+
+De groene blokken zijn Docker-containers op de Pi. De gele blokken zijn
+opslag op de Pi of NAS. `pv-probe` is alleen een eenmalige diagnose en
+maakt geen deel uit van de doorlopende gegevensstroom.
+
+```mermaid
+flowchart TB
+    dsmr["DSMR P1-meter<br/>stroom en gas"] --> p1["p1<br/>seriële lezer"]
+    watermeter["Watermeter<br/>1 puls = 1 liter"] --> water["water<br/>GPIO17 en nulmetingen"]
+    goodwe["GoodWe SEMS+<br/>cloud"] --> pv["pv<br/>collector"]
+    goodwe -.->|eenmalige test zonder opslag| pvprobe["pv-probe"]
+
+    p1 --> p1buf[("SQLite<br/>P1-buffer")] --> p1sync["p1-sync"]
+    water --> waterbuf[("SQLite<br/>waterbuffer")] --> watersync["water-sync"]
+    pv --> pvbuf[("SQLite<br/>PV-buffer")] --> pvsync["pv-sync"]
+
+    p1sync --> raw[("MariaDB op NAS · nuts_v2<br/>p1_reading · water_event · pv_reading")]
+    watersync --> raw
+    pvsync --> raw
+
+    raw --> aggregate["aggregate<br/>dag- en maandverbruik"]
+    aggregate --> totals[("daily_usage<br/>monthly_usage")]
+
+    invoer["Contracten, tarieven<br/>en voorschotten"] --> tariffs["tariffs<br/>beheerpagina"]
+    tariffs --> tariffdb[("Contracten en tariefregels<br/>in nuts_v2")]
+    tariffs --> advances[("Voorschotschema's<br/>in nuts_v2")]
+
+    totals --> costs["costs<br/>dagkosten berekenen"]
+    tariffdb --> costs
+    costs --> costdb[("daily_cost_line")]
+
+    raw --> publisher["publisher<br/>actuele waarden en variabele kosten"]
+    tariffdb --> publisher
+    publisher -->|sensors/dsmr/* en sensors/water| mqtt[("MQTT-broker op NAS")]
+    pv -->|sensors/pv| mqtt
+    mqtt --> openhab["openHAB"]
+
+    raw --> dashboard["dashboard<br/>grafieken :8767"]
+    totals --> dashboard
+    costdb --> dashboard
+
+    totals --> nota["nota-web<br/>verwachte nota :8766"]
+    tariffdb --> nota
+    advances --> nota
+    dashboard --> browser["Browser"]
+    nota --> browser
+    tariffs -->|alleen lokaal of via SSH-tunnel| browser
+
+    maintenance["maintenance<br/>bewaartermijn"] -.->|ruimt oude ruwe metingen op| raw
+
+    classDef source fill:#eaf2ff,stroke:#557bb5,color:#172b48;
+    classDef container fill:#e8f6ef,stroke:#34865e,color:#173b2a;
+    classDef storage fill:#fff2d9,stroke:#ba8430,color:#493515;
+    classDef output fill:#f2eaff,stroke:#8b65b5,color:#352348;
+
+    class dsmr,watermeter,goodwe,invoer source;
+    class p1,water,pv,pvprobe,p1sync,watersync,pvsync,aggregate,costs,publisher,tariffs,dashboard,nota,maintenance container;
+    class p1buf,waterbuf,pvbuf,raw,totals,tariffdb,advances,costdb,mqtt storage;
+    class openhab,browser output;
+```
