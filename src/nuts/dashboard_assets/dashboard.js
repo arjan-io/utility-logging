@@ -365,9 +365,13 @@ function makeCards(data) {
     heading.className = 'label';
     heading.textContent = label;
     const number = document.createElement('span');
-    number.className = 'value' + (value == null ? ' missing' : '');
+    number.className = 'value' + (unit === 'm³' ? ' gas-reading' : '') +
+      (value == null ? ' missing' : '');
+    const digits = unit === 'm³' ? 1 : 0;
     number.textContent = value == null ? 'Geen actuele waarde' :
-      `${valueText(value, unit === 'm³' ? 3 : 0)} ${unit}`;
+      `${new Intl.NumberFormat('nl-NL', {
+        minimumFractionDigits: digits, maximumFractionDigits: digits,
+      }).format(value)} ${unit}`;
     const detail = document.createElement('span');
     detail.className = 'detail';
     detail.textContent = localStamp(stamp);
