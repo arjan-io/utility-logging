@@ -22,10 +22,13 @@ P1_COLUMNS = (
 )
 WATER_COLUMNS = ("event_id", "measured_at_utc", "event_kind", "liters")
 PV_COLUMNS = ("event_id", "measured_at_utc", "generated_total_kwh", "current_w")
+PV_DAY_COLUMNS = ("event_id", "measured_at_utc", "usage_date",
+                  "generated_kwh", "current_w")
 SCHEMAS = {
     "p1": "p1_outbox.sql",
     "water": "water_outbox.sql",
     "pv": "pv_outbox.sql",
+    "pv_day": "pv_day_outbox.sql",
 }
 
 
@@ -113,6 +116,34 @@ class Outbox:
             "current_w": current_w,
         }
         self._insert_or_verify(PV_COLUMNS, values)
+        return values["event_id"]
+
+    def add_pv_day(self, usage_date: str, generated_kwh: Optional[str] = None,
+                   current_w: Optional[int] = None,
+                   measured_at_utc: Optional[str] = None,
+                   event_id: Optional[str] = None) -> str:
+        if self.kind != "pv_day":
+            raise ValueError("Dit is geen PV-dagbuffer")
+        if generated_kwh is None and current_w is None:
+            raise ValueError("PV-dagstand en vermogen ontbreken")
+        if generated_kwh is not None and current_w is None:
+            with self._lock:
+                previous = self.connection.execute(
+                    "SELECT event_id, generated_kwh FROM pv_day_outbox "
+                    "WHERE usage_date=? AND generated_kwh IS NOT NULL "
+                    "AND current_w IS NULL ORDER BY measured_at_utc DESC LIMIT 1",
+                    (str(usage_date),),
+                ).fetchone()
+                if previous is not None and previous["generated_kwh"] == str(generated_kwh):
+                    return previous["event_id"]
+        values = {
+            "event_id": event_id or str(uuid4()),
+            "measured_at_utc": measured_at_utc or utc_timestamp(),
+            "usage_date": str(usage_date),
+            "generated_kwh": str(generated_kwh) if generated_kwh is not None else None,
+            "current_w": current_w,
+        }
+        self._insert_or_verify(PV_DAY_COLUMNS, values)
         return values["event_id"]
 
     def _insert_or_verify(self, columns, values) -> None:

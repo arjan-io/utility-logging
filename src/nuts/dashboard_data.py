@@ -184,12 +184,20 @@ def snapshot(connection, now=None):
         FROM pv_reading WHERE measured_at_utc BETWEEN %s AND %s
         ORDER BY measured_at_utc
     """, (raw_start, raw_end))
+    pv.extend(query(connection, """
+        SELECT measured_at_utc, current_w, NULL AS generated_total_kwh
+        FROM pv_day_observation
+        WHERE current_w IS NOT NULL AND measured_at_utc BETWEEN %s AND %s
+        ORDER BY measured_at_utc
+    """, (raw_start, raw_end)))
+    pv.sort(key=lambda row: row["measured_at_utc"])
+    pv_power = [row for row in pv if row["current_w"] is not None]
     water = query(connection, """
         SELECT measured_at_utc, liters FROM water_event
         WHERE measured_at_utc BETWEEN %s AND %s ORDER BY measured_at_utc
     """, (raw_start, raw_end))
     latest_p1 = p1[-1] if p1 else None
-    latest_pv = pv[-1] if pv else None
+    latest_pv = pv_power[-1] if pv_power else None
     latest_water = water[-1] if water else None
     latest_gas = next((row for row in reversed(p1) if row["gas_m3"] is not None), None)
     p1_fresh = bool(latest_p1 and raw_end - latest_p1["measured_at_utc"] <= timedelta(minutes=2))
@@ -222,7 +230,7 @@ def snapshot(connection, now=None):
         "recent": {
             "import_w": recent_power(p1, "import_w", raw_start, raw_end),
             "export_w": recent_power(p1, "export_w", raw_start, raw_end),
-            "pv_w": recent_power(pv, "current_w", raw_start, raw_end),
+            "pv_w": recent_power(pv_power, "current_w", raw_start, raw_end),
             "water_liters_per_hour": recent_water(water, raw_start, raw_end),
         },
     }

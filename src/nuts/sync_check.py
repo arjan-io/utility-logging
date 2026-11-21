@@ -31,7 +31,8 @@ def check_sync_pipeline(connection) -> None:
     with TemporaryDirectory(prefix="nuts-sync-check-") as directory:
         with Outbox(str(Path(directory) / "p1.sqlite"), "p1") as p1, \
                 Outbox(str(Path(directory) / "water.sqlite"), "water") as water, \
-                Outbox(str(Path(directory) / "pv.sqlite"), "pv") as pv:
+                Outbox(str(Path(directory) / "pv.sqlite"), "pv") as pv, \
+                Outbox(str(Path(directory) / "pv.sqlite"), "pv_day") as pv_day:
             p1_id = p1.add_p1({
                 "measured_at_utc": measured_at,
                 "import_low_kwh": "1.000",
@@ -45,6 +46,7 @@ def check_sync_pipeline(connection) -> None:
             })
             water_id = water.add_water("pulse", measured_at)
             pv_id = pv.add_pv("11872.000", 0, measured_at)
+            pv_day_id = pv_day.add_pv_day("2026-11-19", "1.700", measured_at_utc=measured_at)
 
             # These are disposable SQLite files. The actual MariaDB connection
             # stays in one uncommitted transaction throughout the probe.
@@ -53,14 +55,16 @@ def check_sync_pipeline(connection) -> None:
             try:
                 sink = MariaDBSink(RollbackOnlyConnection(connection))
                 if (sync_batch(p1, sink) != 1 or sync_batch(water, sink) != 1
-                        or sync_batch(pv, sink) != 1):
+                        or sync_batch(pv, sink) != 1 or sync_batch(pv_day, sink) != 1):
                     raise RuntimeError("Niet alle tijdelijke events gesynchroniseerd")
-                if p1.pending_count() != 0 or water.pending_count() != 0 or pv.pending_count() != 0:
+                if (p1.pending_count() != 0 or water.pending_count() != 0
+                        or pv.pending_count() != 0 or pv_day.pending_count() != 0):
                     raise RuntimeError("Tijdelijke SQLite-events niet bevestigd")
                 cursor = connection.cursor()
                 try:
                     for table, event_id in (("p1_reading", p1_id), ("water_event", water_id),
-                                            ("pv_reading", pv_id)):
+                                            ("pv_reading", pv_id),
+                                            ("pv_day_observation", pv_day_id)):
                         cursor.execute(
                             "SELECT COUNT(*) FROM nuts_v2.{} WHERE event_id=%s".format(table),
                             (event_id,),
@@ -75,7 +79,8 @@ def check_sync_pipeline(connection) -> None:
             cursor = connection.cursor()
             try:
                 for table, event_id in (("p1_reading", p1_id), ("water_event", water_id),
-                                        ("pv_reading", pv_id)):
+                                        ("pv_reading", pv_id),
+                                        ("pv_day_observation", pv_day_id)):
                     cursor.execute(
                         "SELECT COUNT(*) FROM nuts_v2.{} WHERE event_id=%s".format(table),
                         (event_id,),
@@ -103,7 +108,7 @@ def main() -> None:
         check_sync_pipeline(connection)
     finally:
         connection.close()
-    print("OK: tijdelijke P1-, water- en PV-buffers gesynchroniseerd; MariaDB-rijen teruggedraaid")
+    print("OK: tijdelijke P1-, water-, PV- en PV-dagbuffers gesynchroniseerd; MariaDB-rijen teruggedraaid")
 
 
 if __name__ == "__main__":

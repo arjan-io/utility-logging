@@ -4,7 +4,7 @@ import os
 import time
 from typing import Mapping
 
-from .outbox import Outbox, P1_COLUMNS, WATER_COLUMNS, PV_COLUMNS
+from .outbox import Outbox, P1_COLUMNS, WATER_COLUMNS, PV_COLUMNS, PV_DAY_COLUMNS
 
 
 INSERT_P1 = """
@@ -32,6 +32,12 @@ INSERT INTO nuts_v2.pv_reading
 VALUES (%s, 'collector', %s, UTC_TIMESTAMP(3), %s, %s)
 ON DUPLICATE KEY UPDATE event_id=VALUES(event_id)
 """
+INSERT_PV_DAY = """
+INSERT INTO nuts_v2.pv_day_observation
+(event_id, measured_at_utc, usage_date, generated_kwh, current_w)
+VALUES (%s, %s, %s, %s, %s)
+ON DUPLICATE KEY UPDATE event_id=VALUES(event_id)
+"""
 
 
 def sync_batch(outbox: Outbox, sink, limit: int = 100) -> int:
@@ -57,6 +63,8 @@ class MariaDBSink:
             statement, columns = INSERT_WATER, WATER_COLUMNS
         elif kind == "pv":
             statement, columns = INSERT_PV, PV_COLUMNS
+        elif kind == "pv_day":
+            statement, columns = INSERT_PV_DAY, PV_DAY_COLUMNS
         else:
             raise ValueError(kind)
         cursor = self.connection.cursor()
@@ -89,24 +97,33 @@ def run_forever() -> None:
                 "pv": "PV_OUTBOX_PATH"}[kind]
     path = os.getenv(path_key, "/var/lib/nuts/pv.sqlite") if kind == "pv" else os.environ[path_key]
     with Outbox(path, kind) as outbox:
+        daily_outbox = Outbox(path, "pv_day") if kind == "pv" else None
         last_prune = 0.0
-        while True:
-            try:
-                connection = mysql.connector.connect(**db_config)
+        try:
+            while True:
                 try:
-                    sink = MariaDBSink(connection)
-                    synced = sync_batch(outbox, sink)
-                finally:
-                    connection.close()
-                if time.monotonic() - last_prune >= 3600:
-                    removed = outbox.prune_delivered()
-                    last_prune = time.monotonic()
-                    if removed:
-                        print("{}: {} bevestigde bufferregels opgeruimd".format(kind, removed), flush=True)
-                time.sleep(1 if synced else 5)
-            except Exception as exc:
-                print("Synchronisatie wacht op NAS: {}".format(exc), flush=True)
-                time.sleep(10)
+                    connection = mysql.connector.connect(**db_config)
+                    try:
+                        sink = MariaDBSink(connection)
+                        synced = sync_batch(outbox, sink)
+                        if daily_outbox is not None:
+                            synced += sync_batch(daily_outbox, sink)
+                    finally:
+                        connection.close()
+                    if time.monotonic() - last_prune >= 3600:
+                        removed = outbox.prune_delivered()
+                        if daily_outbox is not None:
+                            removed += daily_outbox.prune_delivered()
+                        last_prune = time.monotonic()
+                        if removed:
+                            print("{}: {} bevestigde bufferregels opgeruimd".format(kind, removed), flush=True)
+                    time.sleep(1 if synced else 5)
+                except Exception as exc:
+                    print("Synchronisatie wacht op NAS: {}".format(exc), flush=True)
+                    time.sleep(10)
+        finally:
+            if daily_outbox is not None:
+                daily_outbox.close()
 
 
 if __name__ == "__main__":
