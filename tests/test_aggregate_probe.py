@@ -61,6 +61,8 @@ class ProbeTests(unittest.TestCase):
                 return []
 
             def fetchone(self):
+                if "FROM daily_usage" not in self.query:
+                    return None
                 return {"electricity_quality": "unknown",
                         "gas_quality": "unknown", "water_quality": "unknown",
                         "pv_quality": "estimated", "pv_source": "legacy_import",
