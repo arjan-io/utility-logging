@@ -10,15 +10,18 @@ from .aggregate import (_merge_existing, build_daily, day_inputs, one,
 
 
 def preview(connection, day):
-    p1, water, pv = day_inputs(connection, day)
-    calculated = build_daily(day, p1, water, pv)
+    p1, water, pv, pv_day = day_inputs(connection, day)
+    calculated = build_daily(day, p1, water, pv, pv_day)
     existing = one(connection, "SELECT * FROM daily_usage WHERE usage_date=%s", (day,))
     preserved = [commodity for commodity in COMMODITIES
                  if existing is not None
-                 and calculated[commodity + "_quality"] in ("unknown", "not_collected")
-                 and existing[commodity + "_quality"] in ("complete", "estimated")]
+                 and ((calculated[commodity + "_quality"] in ("unknown", "not_collected")
+                       and existing[commodity + "_quality"] in ("complete", "estimated"))
+                      or (commodity == "pv"
+                          and calculated["pv_quality"] == "estimated"
+                          and existing["pv_quality"] == "complete"))]
     effective = _merge_existing(calculated, existing)
-    sources = {"p1": p1, "water": water, "pv": pv}
+    sources = {"p1": p1, "water": water, "pv": pv, "pv_day": pv_day}
     ranges = {name: ({"first_utc": rows[0]["measured_at_utc"].isoformat() + "Z",
                       "last_utc": rows[-1]["measured_at_utc"].isoformat() + "Z"}
                      if rows else None) for name, rows in sources.items()}

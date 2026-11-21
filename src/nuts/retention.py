@@ -112,6 +112,45 @@ def clean_table(connection, table, cutoff, max_rows, batch_size, apply):
     return deleted
 
 
+def clean_pv_power_only(connection, cutoff, max_rows, batch_size, apply):
+    """Power-only samples have no day total and can expire independently."""
+    table = "pv_day_observation"
+    first = one(connection,
+                "SELECT measured_at_utc FROM pv_day_observation "
+                "WHERE generated_kwh IS NULL AND measured_at_utc < %s "
+                "ORDER BY measured_at_utc LIMIT 1", (cutoff,))
+    if first is None:
+        print("{}: geen oude vermogensrijen vóór {} UTC".format(table, cutoff), flush=True)
+        return 0
+    if not apply:
+        print("{}: oudste vermogensrij {} UTC komt in aanmerking".format(
+            table, first[0]), flush=True)
+        return 0
+    deleted = 0
+    while deleted < max_rows:
+        take = min(batch_size, max_rows - deleted)
+        cursor = connection.cursor()
+        try:
+            cursor.execute(
+                "DELETE FROM pv_day_observation WHERE generated_kwh IS NULL "
+                "AND measured_at_utc < %s ORDER BY measured_at_utc LIMIT %s",
+                (cutoff, take),
+            )
+            count = cursor.rowcount
+            connection.commit()
+        except Exception:
+            connection.rollback()
+            raise
+        finally:
+            cursor.close()
+        deleted += count
+        if count < take:
+            break
+        time.sleep(0.05)
+    print("{}: {} oude vermogensrijen verwijderd".format(table, deleted), flush=True)
+    return deleted
+
+
 def run_once(connection, now, retention_days, lookback_days, max_rows,
              batch_size, apply):
     cutoff = cutoff_utc(now, retention_days, lookback_days)
@@ -122,6 +161,7 @@ def run_once(connection, now, retention_days, lookback_days, max_rows,
     total = 0
     for table in RAW_TABLES:
         total += clean_table(connection, table, cutoff, max_rows, batch_size, apply)
+    total += clean_pv_power_only(connection, cutoff, max_rows, batch_size, apply)
     return total
 
 

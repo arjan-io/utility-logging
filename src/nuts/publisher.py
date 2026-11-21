@@ -64,11 +64,18 @@ class MeterRepository:
         """)
 
     def latest_pv(self):
-        return self.one("""
+        cumulative = self.one("""
             SELECT measured_at_utc, current_w FROM pv_reading
             WHERE current_w IS NOT NULL
             ORDER BY measured_at_utc DESC LIMIT 1
         """)
+        fallback = self.one("""
+            SELECT measured_at_utc, current_w FROM pv_day_observation
+            WHERE current_w IS NOT NULL
+            ORDER BY measured_at_utc DESC LIMIT 1
+        """)
+        return max((row for row in (cumulative, fallback) if row is not None),
+                   key=lambda row: row["measured_at_utc"], default=None)
 
     def electric_at(self, moment):
         return self.one("""

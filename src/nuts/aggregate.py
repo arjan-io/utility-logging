@@ -60,7 +60,33 @@ def _quality(qualities):
     return "complete"
 
 
-def build_daily(day, p1_rows, water_rows, pv_rows):
+def _pv_day_end_estimate(samples, day):
+    """Estimate one PV day from the last valid lifetime stand on each day.
+
+    GoodWe may send zero while the inverter sleeps. A noon-or-later stand
+    from both consecutive local days is required, so a missing daylight
+    collection cannot silently become zero generation.
+    """
+    local = ZoneInfo("Europe/Amsterdam")
+    previous_day = day - timedelta(days=1)
+    by_day = {previous_day: [], day: []}
+    for moment, value in samples:
+        sample_day = moment.astimezone(local).date()
+        if sample_day in by_day:
+            by_day[sample_day].append((moment, Decimal(str(value))))
+    ends = {}
+    for sample_day, readings in by_day.items():
+        readings.sort()
+        if not readings or readings[-1][0].astimezone(local).hour < 12:
+            return None
+        if any(new < old for (_, old), (_, new) in zip(readings, readings[1:])):
+            return None
+        ends[sample_day] = readings[-1][1]
+    delta = ends[day] - ends[previous_day]
+    return delta.quantize(Decimal("0.001")) if delta >= 0 else None
+
+
+def build_daily(day, p1_rows, water_rows, pv_rows, pv_day_rows=()):
     result = {"usage_date": day}
     for metric in METRICS:
         result[metric] = None
@@ -108,11 +134,23 @@ def build_daily(day, p1_rows, water_rows, pv_rows):
 
     if pv_rows:
         samples = [(aware(row["measured_at_utc"]), row["generated_total_kwh"])
-                   for row in pv_rows]
+                   for row in pv_rows if Decimal(str(row["generated_total_kwh"])) > 0]
         value, quality = cumulative_daily(samples, day, day, 900)[day]
         result["pv_generated_kwh"] = value
         result["pv_quality"] = quality
         result["pv_source"] = "meter_derived"
+    if (result["pv_quality"] in ("unknown", "not_collected") and pv_day_rows):
+        positive = [row for row in pv_day_rows
+                    if Decimal(str(row["generated_kwh"])) > 0]
+        latest = (positive or pv_day_rows)[-1]
+        result["pv_generated_kwh"] = Decimal(str(latest["generated_kwh"]))
+        result["pv_quality"] = "estimated"
+        result["pv_source"] = "goodwe_daily"
+    if result["pv_quality"] == "unknown" and pv_rows:
+        estimate = _pv_day_end_estimate(samples, day)
+        if estimate is not None:
+            result["pv_generated_kwh"] = estimate
+            result["pv_quality"] = "estimated"
     return result
 
 
@@ -124,6 +162,12 @@ def _merge_existing(proposed, existing):
         source = commodity + "_source"
         if (proposed[quality] in ("unknown", "not_collected") and
                 existing[quality] in ("complete", "estimated")):
+            for metric in metrics:
+                proposed[metric] = existing[metric]
+            proposed[quality] = existing[quality]
+            proposed[source] = existing[source]
+        elif (commodity == "pv" and proposed[quality] == "estimated" and
+              existing[quality] == "complete"):
             for metric in metrics:
                 proposed[metric] = existing[metric]
             proposed[quality] = existing[quality]
@@ -171,7 +215,20 @@ def day_inputs(connection, day):
         WHERE measured_at_utc >= %s AND measured_at_utc <= %s
         ORDER BY measured_at_utc
     """, window)
-    return p1, water, pv
+    previous = one(connection, """
+        SELECT measured_at_utc, generated_total_kwh FROM pv_reading
+        WHERE measured_at_utc >= %s AND measured_at_utc < %s
+          AND generated_total_kwh > 0
+        ORDER BY measured_at_utc DESC LIMIT 1
+    """, (sql_time(day_start_utc(day - timedelta(days=1))), sql_time(start)))
+    if previous is not None and (not pv or previous["measured_at_utc"] < pv[0]["measured_at_utc"]):
+        pv.insert(0, previous)
+    pv_day = rows(connection, """
+        SELECT measured_at_utc, generated_kwh FROM pv_day_observation
+        WHERE usage_date = %s AND generated_kwh IS NOT NULL
+        ORDER BY measured_at_utc
+    """, (day,))
+    return p1, water, pv, pv_day
 
 
 def calculate_day(connection, day):

@@ -4,7 +4,8 @@ Docker-diensten voor elektriciteit, gas en water op een Raspberry Pi.
 MariaDB en de MQTT-broker draaien elders. Dit project bevat uitsluitend
 de uitvoerbare diensten, hun containerconfiguratie en dit installatieblad.
 SQL voor het aanmaken van de MariaDB-tabellen en de eenmalige migratie wordt
-apart aangeleverd en door de beheerder zelf uitgevoerd.
+door de beheerder zelf uitgevoerd. De uitbreiding voor GoodWe-dagstanden
+staat verderop in dit installatieblad.
 
 Alle ruwe meettijdstippen worden in UTC opgeslagen; de website kan die
 naar de gewenste tijdzone omzetten. `usage_date` en `usage_month` zijn
@@ -28,8 +29,8 @@ zomer- en wintertijd de dagtotalen niet een uur verschuiven.
 | `dashboard` | Toont de nieuwe grafiekenpagina via een apart webadres op de Pi; leest MariaDB alleen. |
 | `costs` | Berekent geschatte dagkosten per onderdeel uit dagverbruik en actieve tarieven. |
 | `pv-probe` | Leest eenmalig een GoodWe SEMS+-station zonder data op te slaan. |
-| `pv` | Vraagt SEMS+ periodiek uit en bewaart de cumulatieve opbrengst in een eigen SQLite-buffer. |
-| `pv-sync` | Stuurt PV-metingen onafhankelijk naar MariaDB en herhaalt na NAS-uitval. |
+| `pv` | Vraagt SEMS+ periodiek uit en bewaart cumulatieve standen, dagopbrengst en actueel vermogen in SQLite. |
+| `pv-sync` | Stuurt PV-metingen en GoodWe-dagstanden onafhankelijk naar MariaDB en herhaalt na NAS-uitval. |
 
 De eenmalige historische importer is ook in de standaardimage opgenomen.
 Hij draait niet als achtergrondservice en begint zonder `--apply` in
@@ -76,7 +77,8 @@ blijven leeg in plaats van als nul te verschijnen. De actuele huiswaarde
 volgt dezelfde formule als MQTT: PV + netafname − teruglevering.
 
 Het leesaccount heeft naast de bestaande notatabellen `SELECT` nodig op
-`p1_reading`, `water_event`, `pv_reading` en `daily_cost_line`. Voer die
+`p1_reading`, `water_event`, `pv_reading`, `pv_day_observation` en
+`daily_cost_line`. Voer die
 rechten zelf op de NAS in via phpMyAdmin; de SQL staat bewust niet in deze
 repository. Start daarna op de Pi:
 
@@ -196,7 +198,14 @@ die grens over middernacht valt, wordt over beide dagen verdeeld. Zo'n dag
 heeft de kwaliteit `complete`: de meterstanden zijn gemeten en de verdeling
 is nauwkeurig genoeg voor het dagoverzicht. Een groter gat rond middernacht
 maakt de betrokken dag `unknown`. Voor gas en PV geldt een grens van vijftien
-minuten vanwege hun tragere updates. Dagkosten blijven een raming tot de
+minuten vanwege hun tragere updates. Voor PV worden tijdelijke nulstanden
+van de cumulatieve GoodWe-teller genegeerd. Als de omvormer 's nachts geen
+stand doorgeeft, kan de dagopbrengst uit de laatste geldige stand van twee
+opeenvolgende Nederlandse kalenderdagen worden berekend; die krijgt de
+kwaliteit `estimated`. Als de cumulatieve teller ontbreekt maar het aparte
+GoodWe-dagrapport beschikbaar is, wordt dat als `goodwe_daily` met kwaliteit
+`estimated` gebruikt. Ontbreken beide bronnen én een bruikbare stand na de
+middag, dan blijft de dag `unknown`. Dagkosten blijven een raming tot de
 afrekening, ook wanneer het dagverbruik `complete` is.
 
 Voor de watermeter kies je in `.env` de GPIO-chip met de pinnen van de
@@ -251,8 +260,9 @@ en opgewekte energie. Ontbrekende velden krijgen `null`;
 bruikbare cumulatieve stand leverde. De proef vraagt ook de afzonderlijke
 dagopbrengst van het station op onder `station_day_fallback`, met een korte
 `fallback_status`. Herhaal de proef later als ook die ontbreekt. De collector
-slaat zo'n onvolledig antwoord niet op en probeert bij de volgende cyclus
-opnieuw. De PV-proef heeft
+bewaart een bruikbaar actueel vermogen ook zonder cumulatieve tellerstand;
+de afzonderlijke dagopbrengst wordt daarna via het dagrapport opgehaald.
+De PV-proef heeft
 een eigen Python 3.12-image, omdat `pygoodwe` dat vereist. De officiële
 image ondersteunt ARMv7 op de huidige 32-bit Pi en ARM64 op een latere Pi.
 `pv-probe` blijft na afloop niet draaien en opent geen seriële of GPIO-poort.
@@ -266,6 +276,75 @@ eenheid ontbreekt. Expliciete eenheden in de API-uitvoer worden altijd zelf
 omgerekend. Het huidige vermogen uit `powerflow.pv` wordt als watt gelezen;
 als dit veld ontbreekt, blijft `current_w` leeg. De oude `inverter_*`-velden
 zijn voor dit omvormermodel niet nodig.
+
+### GoodWe-dagrapport bij ontbrekende totaalstand
+
+De aparte dagopbrengst van SEMS+ blijft beschikbaar wanneer de cumulatieve
+teller ontbreekt. Voer op een bestaande `nuts_v2`-database eerst deze
+eenmalige uitbreiding uit in phpMyAdmin. De SQL wijzigt geen oude metingen:
+
+```sql
+USE nuts_v2;
+CREATE TABLE IF NOT EXISTS pv_day_observation (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+  event_id CHAR(36) CHARACTER SET ascii NOT NULL,
+  measured_at_utc DATETIME(3) NOT NULL,
+  usage_date DATE NOT NULL,
+  generated_kwh DECIMAL(14,3) NULL,
+  current_w INT UNSIGNED NULL,
+  UNIQUE KEY uq_pv_day_event (event_id),
+  KEY ix_pv_day_date_time (usage_date, measured_at_utc),
+  KEY ix_pv_day_measured_at (measured_at_utc),
+  CHECK (generated_kwh >= 0),
+  CHECK (generated_kwh IS NOT NULL OR current_w IS NOT NULL)
+) ENGINE=InnoDB;
+ALTER TABLE daily_usage
+  MODIFY pv_source ENUM('meter_derived', 'goodwe_daily', 'legacy_import', 'not_available') NOT NULL;
+```
+
+Geef het bestaande dashboardleesaccount (`NOTA_DB_USER`) daarna `SELECT` op
+`nuts_v2.pv_day_observation`. Het account van `maintenance` (`DB_USER`)
+heeft op deze nieuwe tabel ook `DELETE` nodig om oude vermogensmetingen op
+te ruimen. Gebruik dezelfde hostgebonden accounts als bij de bestaande
+tabellen; de SQL hierboven maakt geen nieuwe databasegebruikers aan.
+
+Na deze uitbreiding halen `pv` en `pv-sync` de GoodWe-dagstanden via hun
+gezamenlijke SQLite-buffer op. De collector kijkt bij opstarten ook veertien
+dagen terug, één datum per minuut; vandaag en gisteren komen eerst. Daarna
+ververst hij vandaag en gisteren ongeveer elk uur. `aggregate` gebruikt een
+geldige cumulatieve teller rond middernacht eerst. Een GoodWe-dagstand wordt
+als schatting opgeslagen. Actueel vermogen zonder cumulatieve stand gaat
+eveneens via de buffer, zodat `publisher` en `dashboard` het kunnen gebruiken.
+
+Werk op een bestaande Pi na de SQL-uitbreiding de betrokken diensten bij:
+
+```sh
+cd /home/utility-logging
+git pull --ff-only
+docker compose build pv pv-sync aggregate publisher dashboard maintenance
+docker compose run --rm --no-deps pv-sync python -m nuts.sync_check
+docker compose --profile pv --profile aggregate --profile publish --profile dashboard \
+  --profile maintenance up -d --no-deps pv pv-sync aggregate publisher dashboard maintenance
+```
+
+Controleer na enkele minuten of de dagstanden uit de lokale buffer zijn
+doorgezet. De historische dagen worden bij opstarten één voor één opgehaald;
+19 november 2026 is de derde datum in de reeks als je op 21 november start.
+De dagberekening loopt elk uur en verwerkt de laatste veertien dagen opnieuw.
+
+```sh
+docker compose exec -T pv-sync python -c 'import sqlite3; c=sqlite3.connect("file:/var/lib/nuts/pv.sqlite?mode=ro",uri=True); print("PV-dagbuffer wachtend:", c.execute("SELECT COUNT(*) FROM pv_day_outbox WHERE delivered_at_utc IS NULL").fetchone()[0])'
+docker compose --profile aggregate run --rm --no-deps aggregate python -m nuts.aggregate_probe 2026-11-19
+```
+
+De tweede opdracht leest alleen MariaDB. Verwacht bij de eerder bevestigde
+GoodWe-dagopbrengst voor 19 november `pv_generated_kwh: "1.700"`,
+`pv_quality: "estimated"` en `pv_source: "goodwe_daily"`. Na de eerstvolgende
+dagberekening staat dat ook in `daily_usage`. Voor 17 november kan de
+gefilterde cumulatieve teller 0,900 kWh als `complete` opleveren; de
+losse nulstanden worden niet als tellerreset gezien. Voor 18 november
+kan de dag op basis van de opeenvolgende eindstanden op 1,400 kWh
+`estimated` uitkomen.
 
 De PV-dienst gebruikt het ophaaltijdstip als meettijd. SEMS+ geeft hier geen
 betrouwbare bron-tijdstempel terug. Na bevestiging van de eenheid kun je de
@@ -297,8 +376,8 @@ aan van `$.pv[0].pac` naar `$.pac` en van `$.pv[0].eDag` naar `$.eDag`.
 cloud. Als de dagteller tijdelijk ontbreekt, blijft de laatst ontvangen
 dagwaarde voor dezelfde lokale dag beschikbaar en wordt
 `dayGenerationFresh=false`. Als de cumulatieve teller ontbreekt maar het
-huidige vermogen wel aanwezig is, verschijnt het vermogen toch op MQTT;
-zo'n meting krijgt geen MariaDB-record. Bij een MQTT-storing blijft de
+huidige vermogen wel aanwezig is, verschijnt het vermogen op MQTT én gaat
+het via de PV-buffer naar MariaDB. Bij een MQTT-storing blijft de
 SQLite-opslag werken.
 
 Met `GOODWE_POLL_SECONDS=60` begint een nieuwe opvraag ongeveer iedere
@@ -546,7 +625,9 @@ kleine porties opgeruimd; `water_counter` bewaart de lokale pulsteller.
 
 De ruwe MariaDB-tabellen zijn veel groter dan de dag- en maandtabellen.
 `maintenance` verwijdert uitsluitend oude rijen uit `p1_reading`,
-`water_event` en `pv_reading`. `daily_usage` en `monthly_usage` blijven
+`water_event`, `pv_reading` en de vermogensrijen zonder dagopbrengst uit
+`pv_day_observation`. GoodWe-dagstanden blijven daar beschikbaar.
+`daily_usage` en `monthly_usage` blijven
 volledig bewaard, ook voor de historische grafieken. Alleen volledig
 afgelopen Nederlandse kalendermaanden met een opgeslagen maandtotaal
 voor het betreffende onderdeel komen in aanmerking. De bewaartermijn
@@ -575,7 +656,8 @@ kan de achtergrondservice het daarna iedere 15 minuten voortzetten:
 docker compose --profile maintenance up -d maintenance
 ```
 
-Deze service heeft gerichte `DELETE`-rechten op de drie ruwe tabellen nodig;
+Deze service heeft gerichte `DELETE`-rechten op de drie ruwe tabellen en
+op `pv_day_observation` nodig;
 de SQL daarvoor wordt afzonderlijk voor phpMyAdmin aangeleverd. Een nieuwe
 `--apply` van de historische importer na het opruimen voegt de oude ruwe
 bronrijen opnieuw toe. De oude `nuts-*`-databases worden door deze service
@@ -651,7 +733,9 @@ docker compose --profile aggregate run --rm --no-deps aggregate \
 Gebruik een afgesloten lokale kalenderdag. De eerste PV-dag kan `unknown`
 zijn wanneer de cloudcollector pas midden op de dag begon; dat is geen
 nulopbrengst. Voor een complete PV-dag zijn meetpunten rond beide
-middernachtgrenzen nodig. Start de doorlopende `aggregate`-dienst pas
+middernachtgrenzen nodig. Bij ontbrekende nachtmetingen gebruikt de berekening
+de laatste geldige stand van de vorige en de huidige dag als schatting.
+Start de doorlopende `aggregate`-dienst pas
 nadat de berekening en de historische gegevens zijn vergeleken.
 
 ## Huidige status
@@ -682,9 +766,9 @@ flowchart TB
 
     p1 --> p1buf[("SQLite<br/>P1-buffer")] --> p1sync["p1-sync"]
     water --> waterbuf[("SQLite<br/>waterbuffer")] --> watersync["water-sync"]
-    pv --> pvbuf[("SQLite<br/>PV-buffer")] --> pvsync["pv-sync"]
+    pv --> pvbuf[("SQLite<br/>PV- en dagbuffer")] --> pvsync["pv-sync"]
 
-    p1sync --> raw[("MariaDB op NAS · nuts_v2<br/>p1_reading · water_event · pv_reading")]
+    p1sync --> raw[("MariaDB op NAS · nuts_v2<br/>p1_reading · water_event · pv_reading · pv_day_observation")]
     watersync --> raw
     pvsync --> raw
 
