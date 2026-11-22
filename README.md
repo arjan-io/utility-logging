@@ -310,8 +310,10 @@ tabellen; de SQL hierboven maakt geen nieuwe databasegebruikers aan.
 
 Na deze uitbreiding halen `pv` en `pv-sync` de GoodWe-dagstanden via hun
 gezamenlijke SQLite-buffer op. De collector kijkt bij opstarten ook veertien
-dagen terug, één datum per minuut; vandaag en gisteren komen eerst. Daarna
-ververst hij vandaag en gisteren ongeveer elk uur. `aggregate` gebruikt een
+dagen terug, één datum per minuut; vandaag en gisteren komen eerst. Een datum
+zonder bruikbaar antwoord probeert hij in dezelfde ronde nog tweemaal opnieuw,
+nadat de overige datums aan de beurt zijn geweest. Daarna ververst hij vandaag
+en gisteren ongeveer elk uur. `aggregate` gebruikt een
 geldige cumulatieve teller rond middernacht eerst. Een GoodWe-dagstand wordt
 als schatting opgeslagen. Actueel vermogen zonder cumulatieve stand gaat
 eveneens via de buffer, zodat `publisher` en `dashboard` het kunnen gebruiken.

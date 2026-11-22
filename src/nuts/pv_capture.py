@@ -160,11 +160,14 @@ def process_reading(data, unit, timestamp, outbox, client, topic,
 def capture_station_days(station, station_id, local_tz, days, outbox):
     """Queue dated station totals independently of the lifetime counter."""
     current = None
+    completed = set()
     for day in days:
         try:
             moment = datetime.combine(day, clock_time.min, tzinfo=local_tz)
             raw = probe_station_daily(station, station_id, moment)
             if raw is None:
+                print("PV-dagopbrengst ontbreekt voor {}; later opnieuw".format(day),
+                      flush=True)
                 continue
             amount, unit = _quantity(raw, {"Wh", "kWh", "MWh"}, "kWh")
             factor = {"Wh": Decimal("0.001"), "kWh": Decimal(1),
@@ -175,9 +178,10 @@ def capture_station_days(station, station_id, local_tz, days, outbox):
                 day, type(exc).__name__), flush=True)
             continue
         outbox.add_pv_day(day.isoformat(), str(kwh))
+        completed.add(day)
         if day == datetime.now(local_tz).date():
             current = float(kwh)
-    return current
+    return current, completed
 
 
 def run_forever():
@@ -206,6 +210,7 @@ def run_forever():
     last_daily_check = 0.0
     last_daily_sweep = None
     daily_queue = []
+    daily_attempts = {}
     path = os.getenv("PV_OUTBOX_PATH", "/var/lib/nuts/pv.sqlite")
     with Outbox(path, "pv") as outbox, Outbox(path, "pv_day") as daily_outbox:
         while True:
@@ -227,18 +232,26 @@ def run_forever():
             if last_daily_sweep != today:
                 daily_queue = [today, today - timedelta(days=1)] + [
                     today - timedelta(days=offset) for offset in range(2, 15)]
+                daily_attempts = {}
                 last_daily_sweep = today
+            sweep_day = None
             if daily_queue:
-                days = [daily_queue.pop(0)]
+                sweep_day = daily_queue.pop(0)
+                days = [sweep_day]
             elif started - last_daily_check >= 3600:
                 days = [today - timedelta(days=1), today]
             else:
                 days = []
             if days:
-                fresh_day = capture_station_days(station, os.environ["GOODWE_STATION_ID"],
-                                                 local_tz, days, daily_outbox)
+                fresh_day, completed = capture_station_days(
+                    station, os.environ["GOODWE_STATION_ID"], local_tz,
+                    days, daily_outbox)
                 if fresh_day is not None:
                     cached_day = fresh_day
+                if sweep_day is not None and sweep_day not in completed:
+                    daily_attempts[sweep_day] = daily_attempts.get(sweep_day, 0) + 1
+                    if daily_attempts[sweep_day] < 3:
+                        daily_queue.append(sweep_day)
                 last_daily_check = time.monotonic()
             time.sleep(max(0, interval - (time.monotonic() - started)))
 
