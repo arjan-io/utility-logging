@@ -18,8 +18,10 @@ def preview(connection, day):
                  and ((calculated[commodity + "_quality"] in ("unknown", "not_collected")
                        and existing[commodity + "_quality"] in ("complete", "estimated"))
                       or (commodity == "pv"
-                          and calculated["pv_quality"] == "estimated"
-                          and existing["pv_quality"] == "complete"))]
+                          and existing["pv_quality"] == "complete"
+                          and (calculated["pv_quality"] == "estimated"
+                               or (existing["pv_source"] == "meter_derived"
+                                   and calculated["pv_source"] == "goodwe_daily"))))]
     effective = _merge_existing(calculated, existing)
     sources = {"p1": p1, "water": water, "pv": pv, "pv_day": pv_day}
     ranges = {name: ({"first_utc": rows[0]["measured_at_utc"].isoformat() + "Z",
