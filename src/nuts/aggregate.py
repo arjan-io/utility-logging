@@ -140,11 +140,20 @@ def build_daily(day, p1_rows, water_rows, pv_rows, pv_day_rows=()):
         result["pv_quality"] = quality
         result["pv_source"] = "meter_derived"
     if (result["pv_quality"] in ("unknown", "not_collected") and pv_day_rows):
-        positive = [row for row in pv_day_rows
-                    if Decimal(str(row["generated_kwh"])) > 0]
-        latest = (positive or pv_day_rows)[-1]
-        result["pv_generated_kwh"] = Decimal(str(latest["generated_kwh"]))
-        result["pv_quality"] = "estimated"
+        reports = sorted(
+            ((row, Decimal(str(row["generated_kwh"]))) for row in pv_day_rows),
+            key=lambda item: item[0]["measured_at_utc"],
+        )
+        chosen = next((index for index in range(len(reports) - 1, -1, -1)
+                       if reports[index][1] > 0), len(reports) - 1)
+        report, value = reports[chosen]
+        final_report = (
+            chosen == len(reports) - 1
+            and aware(report["measured_at_utc"]) >= day_start_utc(day + timedelta(days=1))
+            and value >= max(item[1] for item in reports)
+        )
+        result["pv_generated_kwh"] = value
+        result["pv_quality"] = "complete" if final_report else "estimated"
         result["pv_source"] = "goodwe_daily"
     if result["pv_quality"] == "unknown" and pv_rows:
         estimate = _pv_day_end_estimate(samples, day)
@@ -166,8 +175,10 @@ def _merge_existing(proposed, existing):
                 proposed[metric] = existing[metric]
             proposed[quality] = existing[quality]
             proposed[source] = existing[source]
-        elif (commodity == "pv" and proposed[quality] == "estimated" and
-              existing[quality] == "complete"):
+        elif (commodity == "pv" and existing[quality] == "complete" and
+              (proposed[quality] == "estimated" or
+               (existing[source] == "meter_derived" and
+                proposed[source] == "goodwe_daily"))):
             for metric in metrics:
                 proposed[metric] = existing[metric]
             proposed[quality] = existing[quality]
