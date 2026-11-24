@@ -203,8 +203,11 @@ van de cumulatieve GoodWe-teller genegeerd. Als de omvormer 's nachts geen
 stand doorgeeft, kan de dagopbrengst uit de laatste geldige stand van twee
 opeenvolgende Nederlandse kalenderdagen worden berekend; die krijgt de
 kwaliteit `estimated`. Als de cumulatieve teller ontbreekt maar het aparte
-GoodWe-dagrapport beschikbaar is, wordt dat als `goodwe_daily` met kwaliteit
-`estimated` gebruikt. Ontbreken beide bronnen én een bruikbare stand na de
+GoodWe-dagrapport beschikbaar is, wordt dat als `goodwe_daily` gebruikt. Een
+dagtotaal dat na afloop van de Nederlandse kalenderdag is opgehaald, krijgt
+`complete`; een waarde die tijdens de dag is opgehaald, blijft `estimated`.
+Een bestaande complete tellerberekening heeft voorrang op het dagrapport.
+Ontbreken beide bronnen én een bruikbare stand na de
 middag, dan blijft de dag `unknown`. Dagkosten blijven een raming tot de
 afrekening, ook wanneer het dagverbruik `complete` is.
 
@@ -314,8 +317,9 @@ dagen terug, één datum per minuut; vandaag en gisteren komen eerst. Een datum
 zonder bruikbaar antwoord probeert hij in dezelfde ronde nog tweemaal opnieuw,
 nadat de overige datums aan de beurt zijn geweest. Daarna ververst hij vandaag
 en gisteren ongeveer elk uur. `aggregate` gebruikt een
-geldige cumulatieve teller rond middernacht eerst. Een GoodWe-dagstand wordt
-als schatting opgeslagen. Actueel vermogen zonder cumulatieve stand gaat
+geldige cumulatieve teller rond middernacht eerst. Een GoodWe-dagstand van een
+afgesloten Nederlandse kalenderdag krijgt `complete`; tijdens die dag blijft
+de stand `estimated`. Actueel vermogen zonder cumulatieve stand gaat
 eveneens via de buffer, zodat `publisher` en `dashboard` het kunnen gebruiken.
 
 Werk op een bestaande Pi na de SQL-uitbreiding de betrokken diensten bij:
@@ -341,7 +345,7 @@ docker compose --profile aggregate run --rm --no-deps aggregate python -m nuts.a
 
 De tweede opdracht leest alleen MariaDB. Verwacht bij de eerder bevestigde
 GoodWe-dagopbrengst voor 19 november `pv_generated_kwh: "1.700"`,
-`pv_quality: "estimated"` en `pv_source: "goodwe_daily"`. Na de eerstvolgende
+`pv_quality: "complete"` en `pv_source: "goodwe_daily"`. Na de eerstvolgende
 dagberekening staat dat ook in `daily_usage`. Voor 17 november kan de
 gefilterde cumulatieve teller 0,900 kWh als `complete` opleveren; de
 losse nulstanden worden niet als tellerreset gezien. Voor 18 november
