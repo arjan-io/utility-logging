@@ -3,6 +3,9 @@ on:
   push:
     branches:
       - codex/goodwe-daily-complete
+  pull_request:
+    branches:
+      - main
 jobs:
   unittest:
     runs-on: ubuntu-latest
