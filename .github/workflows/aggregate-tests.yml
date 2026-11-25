@@ -18,3 +18,4 @@ jobs:
         run: |
           PYTHONPATH=src python -m unittest discover -s tests -p 'test_aggregate*.py' -v
           PYTHONPATH=src python -m unittest discover -s tests -p 'test_pv_capture.py' -v
+# Validation is staged only; this workflow is excluded from main.
