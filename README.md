@@ -319,7 +319,9 @@ nadat de overige datums aan de beurt zijn geweest. Daarna ververst hij vandaag
 en gisteren ongeveer elk uur. `aggregate` gebruikt een
 geldige cumulatieve teller rond middernacht eerst. Een GoodWe-dagstand van een
 afgesloten Nederlandse kalenderdag krijgt `complete`; tijdens die dag blijft
-de stand `estimated`. Actueel vermogen zonder cumulatieve stand gaat
+de stand `estimated`. De collector bewaart het dagtotaal ook opnieuw na
+middernacht als de waarde gelijk is gebleven: die tweede waarneming bevestigt
+dat de dag is afgesloten. Actueel vermogen zonder cumulatieve stand gaat
 eveneens via de buffer, zodat `publisher` en `dashboard` het kunnen gebruiken.
 
 Werk op een bestaande Pi na de SQL-uitbreiding de betrokken diensten bij:
