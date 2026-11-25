@@ -4,12 +4,14 @@ The NAS is never touched on the acquisition path. Each SQLite connection
 uses WAL and FULL synchronous mode; a committed event may be retried safely.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
+import os
 from pathlib import Path
 import sqlite3
 import threading
 from typing import Mapping, Optional
 from uuid import uuid4
+from zoneinfo import ZoneInfo
 
 
 P1_COLUMNS = (
@@ -126,19 +128,28 @@ class Outbox:
             raise ValueError("Dit is geen PV-dagbuffer")
         if generated_kwh is None and current_w is None:
             raise ValueError("PV-dagstand en vermogen ontbreken")
+        measured_at_utc = measured_at_utc or utc_timestamp()
         if generated_kwh is not None and current_w is None:
+            local_tz = ZoneInfo(os.getenv("LOCAL_TIMEZONE", "Europe/Amsterdam"))
+            usage_day = date.fromisoformat(str(usage_date))
+            observation_day = datetime.fromisoformat(measured_at_utc).replace(
+                tzinfo=timezone.utc).astimezone(local_tz).date()
+            confirms_closed_day = observation_day > usage_day
             with self._lock:
                 previous = self.connection.execute(
-                    "SELECT event_id, generated_kwh FROM pv_day_outbox "
+                    "SELECT event_id, generated_kwh, measured_at_utc FROM pv_day_outbox "
                     "WHERE usage_date=? AND generated_kwh IS NOT NULL "
                     "AND current_w IS NULL ORDER BY measured_at_utc DESC LIMIT 1",
                     (str(usage_date),),
                 ).fetchone()
                 if previous is not None and previous["generated_kwh"] == str(generated_kwh):
-                    return previous["event_id"]
+                    previous_day = datetime.fromisoformat(previous["measured_at_utc"]).replace(
+                        tzinfo=timezone.utc).astimezone(local_tz).date()
+                    if (previous_day > usage_day) == confirms_closed_day:
+                        return previous["event_id"]
         values = {
             "event_id": event_id or str(uuid4()),
-            "measured_at_utc": measured_at_utc or utc_timestamp(),
+            "measured_at_utc": measured_at_utc,
             "usage_date": str(usage_date),
             "generated_kwh": str(generated_kwh) if generated_kwh is not None else None,
             "current_w": current_w,
